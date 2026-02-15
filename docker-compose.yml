@@ -18,11 +18,15 @@ services:
     ports:
       - "8000:8000"
     environment:
+      - DATABASE=postgres
+      - SQL_HOST=db
+      - SQL_PORT=5432
+
       - DB_HOST=db
       - DB_NAME=lanoire_db
       - DB_USER=police_user
       - DB_PASSWORD=secure_password
-      - DATABASE=postgres
+      - DB_PORT=5432
     env_file:
       - ./backend/.env.example
     depends_on:
