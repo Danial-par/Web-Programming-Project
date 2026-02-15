@@ -38,6 +38,11 @@ class Case(models.Model):
         related_name="assigned_cases"
     )
 
+    class Meta:
+        permissions = [
+            ("view_all_cases", "Can view all cases"),
+        ]
+
     def __str__(self):
         return self.title
 
