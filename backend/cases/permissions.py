@@ -1,28 +1,23 @@
-from rest_framework.permissions import BasePermission
-
+from rest_framework.permissions import BasePermission, SAFE_METHODS
 
 class CanViewCase(BasePermission):
     """
-    User can view a case if:
-    - they created it
-    - OR they are assigned to it
-    - OR they are a participant
-    - OR they have global permission
+    - Users with cases.view_all_cases can see everything
+    - Others can only see cases they are related to
     """
 
     def has_object_permission(self, request, view, obj):
-        user = request.user
-
-        if not user.is_authenticated:
-            return False
-
-        if user.has_perm("cases.view_all_cases"):
+        if request.user.has_perm("cases.view_all_cases"):
             return True
 
-        if obj.created_by_id == user.id:
-            return True
+        return (
+            obj.created_by == request.user
+            or obj.participants.filter(user=request.user).exists()
+        )
 
-        if obj.assigned_to_id == user.id:
-            return True
 
-        return obj.participants.filter(user=user).exists()
+class CanCreateCase(BasePermission):
+    def has_permission(self, request, view):
+        if request.method == "POST":
+            return request.user.has_perm("cases.add_case")
+        return True

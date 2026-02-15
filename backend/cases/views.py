@@ -1,7 +1,6 @@
+from django.db import models
 from rest_framework.viewsets import ModelViewSet
 from rest_framework.permissions import IsAuthenticated
-
-from django.db import models
 
 from .models import Case
 from .serializers import (
@@ -9,26 +8,21 @@ from .serializers import (
     CaseDetailSerializer,
     CaseCreateSerializer,
 )
-from .permissions import CanViewCase
+from .permissions import CanViewCase, CanCreateCase
 
 
 class CaseViewSet(ModelViewSet):
-    """
-        list:
-        List cases visible to the current user.
-
-        retrieve:
-        Retrieve case details (object-level access enforced).
-
-        create:
-        Create a new case (staff only).
-        """
-    queryset = Case.objects.all()
-    permission_classes = [IsAuthenticated, CanViewCase]
+    permission_classes = [
+        IsAuthenticated,
+        CanCreateCase,
+        CanViewCase,
+    ]
 
     def get_serializer_class(self):
         if self.action == "list":
             return CaseListSerializer
+        if self.action == "retrieve":
+            return CaseDetailSerializer
         if self.action == "create":
             return CaseCreateSerializer
         return CaseDetailSerializer
@@ -46,9 +40,4 @@ class CaseViewSet(ModelViewSet):
         ).distinct()
 
     def perform_create(self, serializer):
-        # Only staff can create cases directly (complaints come later)
-        if not self.request.user.is_staff:
-            from rest_framework.exceptions import PermissionDenied
-            raise PermissionDenied("Only staff can create cases.")
-
-        serializer.save()
+        serializer.save(created_by=self.request.user)
