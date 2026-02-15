@@ -1,0 +1,32 @@
+services:
+  db:
+    image: postgres:15-alpine
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_DB=lanoire_db
+      - POSTGRES_USER=police_user
+      - POSTGRES_PASSWORD=secure_password
+    ports:
+      - "5432:5432"
+
+  backend:
+    build: ./backend
+    command: python manage.py runserver 0.0.0.0:8000
+    volumes:
+      - ./backend:/app
+    ports:
+      - "8000:8000"
+    environment:
+      - DB_HOST=db
+      - DB_NAME=lanoire_db
+      - DB_USER=police_user
+      - DB_PASSWORD=secure_password
+      - DATABASE=postgres
+    env_file:
+      - ./backend/.env.example
+    depends_on:
+      - db
+
+volumes:
+  postgres_data:
