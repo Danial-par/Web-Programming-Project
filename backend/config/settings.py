@@ -20,7 +20,10 @@ INSTALLED_APPS = [
     'corsheaders',
     # Local
     'common',
+    'accounts',
 ]
+
+AUTH_USER_MODEL = 'accounts.User' 
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
@@ -79,6 +82,9 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 # DRF Config
 REST_FRAMEWORK = {
     'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
+    'DEFAULT_AUTHENTICATION_CLASSES': (
+        'rest_framework_simplejwt.authentication.JWTAuthentication',
+    ),
     'EXCEPTION_HANDLER': 'common.exceptions.custom_exception_handler',
 }
 
@@ -91,3 +97,18 @@ SPECTACULAR_SETTINGS = {
 
 # CORS
 CORS_ALLOW_ALL_ORIGINS = os.environ.get('CORS_ALLOW_ALL_ORIGINS', 'False') == 'True'
+
+from datetime import timedelta
+SIMPLE_JWT = {
+    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=60),
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=1),
+    'AUTH_HEADER_TYPES': ('Bearer',),
+    'USER_ID_FIELD': 'id',
+    'USER_ID_CLAIM': 'user_id',
+}
+
+# Custom Auth Backend to allow login via email/phone/national_id
+AUTHENTICATION_BACKENDS = [
+    'accounts.backends.MultiFieldModelBackend',
+    'django.contrib.auth.backends.ModelBackend',
+]
