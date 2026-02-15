@@ -11,6 +11,16 @@ from .permissions import CanViewCase
 
 
 class CaseViewSet(ModelViewSet):
+    """
+        list:
+        List cases visible to the current user.
+
+        retrieve:
+        Retrieve case details (object-level access enforced).
+
+        create:
+        Create a new case (staff only).
+        """
     queryset = Case.objects.all()
     permission_classes = [IsAuthenticated, CanViewCase]
 
