@@ -12,6 +12,7 @@ class CanViewCase(BasePermission):
 
         return (
             obj.created_by == request.user
+            or obj.assigned_to == request.user
             or obj.participants.filter(user=request.user).exists()
         )
 
