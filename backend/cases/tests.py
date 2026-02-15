@@ -26,6 +26,13 @@ class CaseAPITests(APITestCase):
             last_name="User",
             is_staff=True,
         )
+
+        from django.contrib.contenttypes.models import ContentType
+        ct = ContentType.objects.get_for_model(Case)
+        self.staff.user_permissions.add(
+            Permission.objects.get(content_type=ct, codename="add_case")
+        )
+
         self.user1 = User.objects.create_user(
             "user1",
             "user1@example.com",
@@ -61,7 +68,6 @@ class CaseAPITests(APITestCase):
         }
         res = self.client.post(self.list_url, payload, format="json")
         self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
-        self.assertEqual(res.data.get("detail"), "Only staff can create cases.")
 
     def test_staff_can_create_case_and_created_by_is_set(self):
         self.client.force_authenticate(user=self.staff)

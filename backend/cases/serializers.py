@@ -28,10 +28,3 @@ class CaseCreateSerializer(serializers.ModelSerializer):
             "description",
             "crime_level",
         ]
-
-    def create(self, validated_data):
-        user = self.context["request"].user
-        return Case.objects.create(
-            created_by=user,
-            **validated_data
-        )
