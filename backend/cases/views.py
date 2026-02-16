@@ -1,4 +1,5 @@
 from django.db import models, transaction
+from django.db.models import Q
 from django.utils import timezone
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
@@ -64,14 +65,15 @@ class ComplaintViewSet(viewsets.ModelViewSet):
         user = self.request.user
         qs = super().get_queryset()
 
-        if user.has_perm("cases.view_all_complaints") or user.has_perm("cases.cadet_review_complaint") or user.has_perm("cases.officer_review_complaint"):
+        if (
+                user.has_perm("cases.view_all_complaints")
+                or user.has_perm("cases.cadet_review_complaint")
+                or user.has_perm("cases.officer_review_complaint")
+        ):
             return qs
 
         return qs.filter(
-            # creator
-            created_by=user
-        ).union(
-            qs.filter(complainants__user=user)
+            Q(created_by=user) | Q(complainants__user=user)
         ).distinct()
 
     def get_serializer_class(self):
