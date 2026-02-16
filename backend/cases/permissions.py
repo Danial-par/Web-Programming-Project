@@ -1,6 +1,6 @@
 from rest_framework.permissions import BasePermission, SAFE_METHODS
 
-from .models import Complaint, ComplaintComplainant
+from .models import Complaint, ComplaintComplainant, SceneReport
 
 class CanViewCase(BasePermission):
     """
@@ -54,3 +54,26 @@ class CanCadetReviewComplaint(BasePermission):
 class CanOfficerReviewComplaint(BasePermission):
     def has_permission(self, request, view):
         return request.user.is_authenticated and request.user.has_perm("cases.officer_review_complaint")
+
+class CanCreateSceneReport(BasePermission):
+    def has_permission(self, request, view):
+        return request.user.is_authenticated and request.user.has_perm("cases.create_scene_report")
+
+
+class CanApproveSceneReport(BasePermission):
+    def has_permission(self, request, view):
+        return request.user.is_authenticated and request.user.has_perm("cases.approve_scene_report")
+
+
+class CanViewSceneReport(BasePermission):
+    def has_object_permission(self, request, view, obj: SceneReport):
+        if not request.user.is_authenticated:
+            return False
+
+        if request.user.has_perm("cases.view_all_scene_reports"):
+            return True
+
+        if request.user.has_perm("cases.approve_scene_report"):
+            return True
+
+        return obj.created_by_id == request.user.id
