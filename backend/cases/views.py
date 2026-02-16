@@ -286,6 +286,19 @@ class SceneReportViewSet(ModelViewSet):
     queryset = SceneReport.objects.all().order_by("-created_at")
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(
+        request=SceneReportCreateSerializer,
+        responses={201: SceneReportDetailSerializer},
+    )
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)  # this is SceneReportCreateSerializer
+        serializer.is_valid(raise_exception=True)
+        scene_report = serializer.save()
+
+        # Return a representation serializer, not the input serializer
+        output = SceneReportDetailSerializer(scene_report, context={"request": request}).data
+        return Response(output, status=status.HTTP_201_CREATED)
+
     def get_queryset(self):
         user = self.request.user
         qs = super().get_queryset()

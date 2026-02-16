@@ -245,3 +245,10 @@ class SceneReportDetailSerializer(serializers.ModelSerializer):
             "witnesses",
         ]
 
+
+class SceneReportApproveSerializer(serializers.Serializer):
+    """
+    Approve endpoint does not require a body.
+    Kept for swagger consistency.
+    """
+    pass
