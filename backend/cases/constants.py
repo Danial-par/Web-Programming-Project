@@ -20,3 +20,19 @@ class CaseStatus(models.TextChoices):
     DRAFT = "draft", "Draft"
     ACTIVE = "active", "Active"
     CLOSED = "closed", "Closed"
+
+
+class ComplaintStatus(models.TextChoices):
+    DRAFT = "draft", "Draft"
+    SUBMITTED = "submitted", "Submitted"
+    CADET_REJECTED = "cadet_rejected", "Cadet Rejected"
+    CADET_APPROVED = "cadet_approved", "Cadet Approved"
+    OFFICER_REJECTED = "officer_rejected", "Officer Rejected"
+    OFFICER_APPROVED = "officer_approved", "Officer Approved"
+    INVALID = "invalid", "Invalid"
+
+
+class ComplaintComplainantStatus(models.TextChoices):
+    PENDING = "pending", "Pending"
+    APPROVED = "approved", "Approved"
+    REJECTED = "rejected", "Rejected"
