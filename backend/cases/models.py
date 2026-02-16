@@ -1,7 +1,7 @@
 from django.conf import settings
 from django.db import models
 from django.utils import timezone
-from .constants import CrimeLevel, CaseStatus, ComplaintStatus, ComplaintComplainantStatus
+from .constants import CrimeLevel, CaseStatus, ComplaintStatus, ComplaintComplainantStatus, SceneReportStatus
 
 User = settings.AUTH_USER_MODEL
 
@@ -181,3 +181,57 @@ class ComplaintComplainant(models.Model):
 
     class Meta:
         unique_together = ("complaint", "user")
+
+
+class SceneReport(models.Model):
+    case = models.OneToOneField(
+        "cases.Case",
+        on_delete=models.CASCADE,
+        related_name="scene_report",
+    )
+
+    scene_datetime = models.DateTimeField()
+
+    status = models.CharField(
+        max_length=16,
+        choices=SceneReportStatus.choices,
+        default=SceneReportStatus.PENDING,
+    )
+
+    created_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name="created_scene_reports",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    approved_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="approved_scene_reports",
+    )
+    approved_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        permissions = [
+            ("view_all_scene_reports", "Can view all scene reports"),
+            ("create_scene_report", "Can create scene reports"),
+            ("approve_scene_report", "Can approve scene reports"),
+            ("auto_approve_scene_report", "Can auto-approve scene reports (chief bypass)"),
+        ]
+
+
+class SceneWitness(models.Model):
+    scene_report = models.ForeignKey(
+        SceneReport,
+        on_delete=models.CASCADE,
+        related_name="witnesses",
+    )
+    phone = models.CharField(max_length=32)
+    national_id = models.CharField(max_length=32)
+
+    class Meta:
+        unique_together = ("scene_report", "phone", "national_id")
