@@ -1,15 +1,14 @@
-# backend/cases/tests.py
-
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Permission
 from django.contrib.contenttypes.models import ContentType
 from django.db import IntegrityError
 from django.urls import reverse
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
 
-from .constants import CrimeLevel, ComplaintStatus
-from .models import Case, CaseParticipant, Complaint
+from .constants import CaseStatus, CrimeLevel, ComplaintStatus, SceneReportStatus
+from .models import Case, CaseParticipant, Complaint, SceneReport
 
 
 def extract_list_payload(res):
@@ -418,3 +417,250 @@ class ComplaintWorkflowTests(APITestCase):
         res2 = self.client.post(reverse("complaint-cadet-review", kwargs={"pk": cid}), {"decision": "approve"}, format="json")
         self.assertEqual(res2.status_code, 200)
         self.assertEqual(res2.data["current_status"], ComplaintStatus.CADET_APPROVED)
+
+
+class ComplaintExtraSafetyTests(APITestCase):
+    def setUp(self):
+        self.u1 = User.objects.create_user(
+            username="u1x", email="u1x@example.com", password="pass12345",
+            phone="09120002001", national_id="9000000001", first_name="U", last_name="1"
+        )
+        self.u2 = User.objects.create_user(
+            username="u2x", email="u2x@example.com", password="pass12345",
+            phone="09120002002", national_id="9000000002", first_name="U", last_name="2"
+        )
+        self.cadet = User.objects.create_user(
+            username="cadetx", email="cadetx@example.com", password="pass12345",
+            phone="09120002003", national_id="9000000003", first_name="C", last_name="A"
+        )
+        self.officer = User.objects.create_user(
+            username="officerx", email="officerx@example.com", password="pass12345",
+            phone="09120002004", national_id="9000000004", first_name="O", last_name="F"
+        )
+
+        ct = ContentType.objects.get_for_model(Complaint)
+        self.cadet.user_permissions.add(Permission.objects.get(content_type=ct, codename="cadet_review_complaint"))
+        self.officer.user_permissions.add(Permission.objects.get(content_type=ct, codename="officer_review_complaint"))
+
+    def _create_complaint_as_u1(self):
+        self.client.force_authenticate(self.u1)
+        res = self.client.post(
+            reverse("complaint-list"),
+            {"title": "T", "description": "D", "crime_level": "level_1"},
+            format="json",
+        )
+        self.assertEqual(res.status_code, 201)
+        return res.data["id"]
+
+    def test_non_cadet_cannot_cadet_review(self):
+        cid = self._create_complaint_as_u1()
+        self.client.force_authenticate(self.u1)
+        res = self.client.post(reverse("complaint-cadet-review", kwargs={"pk": cid}), {"decision": "approve"}, format="json")
+        self.assertEqual(res.status_code, 403)
+
+    def test_non_officer_cannot_officer_review(self):
+        cid = self._create_complaint_as_u1()
+        self.client.force_authenticate(self.cadet)
+        self.client.post(reverse("complaint-cadet-review", kwargs={"pk": cid}), {"decision": "approve"}, format="json")
+
+        self.client.force_authenticate(self.cadet)
+        res = self.client.post(reverse("complaint-officer-review", kwargs={"pk": cid}), {"decision": "approve"}, format="json")
+        self.assertEqual(res.status_code, 403)
+
+    def test_complaint_scoping_user_cannot_see_others(self):
+        cid = self._create_complaint_as_u1()
+
+        self.client.force_authenticate(self.u2)
+        res_list = self.client.get(reverse("complaint-list"))
+        self.assertEqual(res_list.status_code, 200)
+        ids = [c["id"] for c in res_list.data]
+        self.assertNotIn(cid, ids)
+
+        res_detail = self.client.get(reverse("complaint-detail", kwargs={"pk": cid}))
+        self.assertIn(res_detail.status_code, [403, 404])
+
+    def test_cannot_resubmit_unless_cadet_rejected(self):
+        cid = self._create_complaint_as_u1()
+        self.client.force_authenticate(self.u1)
+        res = self.client.patch(reverse("complaint-resubmit", kwargs={"pk": cid}), {"description": "D1"}, format="json")
+        self.assertEqual(res.status_code, 400)
+
+
+class SceneReportWorkflowTests(APITestCase):
+    def setUp(self):
+        self.user_police = User.objects.create_user(
+            username="police",
+            email="police@example.com",
+            password="pass12345",
+            phone="09120001001",
+            national_id="5555555555",
+            first_name="P",
+            last_name="L",
+        )
+
+        self.superior = User.objects.create_user(
+            username="superior",
+            email="superior@example.com",
+            password="pass12345",
+            phone="09120001002",
+            national_id="6666666666",
+            first_name="S",
+            last_name="U",
+        )
+
+        self.chief = User.objects.create_user(
+            username="chief",
+            email="chief@example.com",
+            password="pass12345",
+            phone="09120001003",
+            national_id="7777777777",
+            first_name="C",
+            last_name="H",
+        )
+
+        ct = ContentType.objects.get_for_model(SceneReport)
+
+        perm_create = Permission.objects.get(content_type=ct, codename="create_scene_report")
+        perm_approve = Permission.objects.get(content_type=ct, codename="approve_scene_report")
+        perm_auto = Permission.objects.get(content_type=ct, codename="auto_approve_scene_report")
+
+        self.user_police.user_permissions.add(perm_create)
+        self.superior.user_permissions.add(perm_approve)
+        self.chief.user_permissions.add(perm_create, perm_auto)
+
+    def test_police_creates_pending_scene_report_and_draft_case(self):
+        self.client.force_authenticate(self.user_police)
+        url = reverse("scene-report-list")
+        payload = {
+            "title": "Scene Case",
+            "description": "Saw something",
+            "crime_level": "level_1",
+            "scene_datetime": timezone.now().isoformat(),
+            "witnesses": [{"phone": "09120000000", "national_id": "1234567890"}],
+        }
+        res = self.client.post(url, payload, format="json")
+        self.assertEqual(res.status_code, 201)
+
+        sr = SceneReport.objects.get(id=res.data["id"])
+        self.assertEqual(sr.status, SceneReportStatus.PENDING)
+        self.assertEqual(sr.case.status, CaseStatus.DRAFT)
+
+    def test_superior_can_approve_scene_report(self):
+        self.client.force_authenticate(self.user_police)
+        sr_id = self.client.post(
+            reverse("scene-report-list"),
+            {
+                "title": "Scene Case",
+                "description": "Saw something",
+                "crime_level": "level_1",
+                "scene_datetime": timezone.now().isoformat(),
+            },
+            format="json",
+        ).data["id"]
+
+        self.client.force_authenticate(self.superior)
+        res = self.client.post(reverse("scene-report-approve", kwargs={"pk": sr_id}), {}, format="json")
+        self.assertEqual(res.status_code, 200)
+
+        sr = SceneReport.objects.get(id=sr_id)
+        self.assertEqual(sr.status, SceneReportStatus.APPROVED)
+        self.assertEqual(sr.case.status, CaseStatus.ACTIVE)
+        self.assertIsNotNone(sr.case.formed_at)
+
+    def test_chief_bypass_auto_approves_on_create(self):
+        self.client.force_authenticate(self.chief)
+        res = self.client.post(
+            reverse("scene-report-list"),
+            {
+                "title": "Chief Case",
+                "description": "Immediate approval",
+                "crime_level": "level_2",
+                "scene_datetime": timezone.now().isoformat(),
+            },
+            format="json",
+        )
+        self.assertEqual(res.status_code, 201)
+
+        sr = SceneReport.objects.get(id=res.data["id"])
+        self.assertEqual(sr.status, SceneReportStatus.APPROVED)
+        self.assertEqual(sr.case.status, CaseStatus.ACTIVE)
+
+
+class SceneReportExtraSafetyTests(APITestCase):
+    def setUp(self):
+        self.police = User.objects.create_user(
+            username="police2", email="police2@example.com", password="pass12345",
+            phone="09120003001", national_id="8000000001", first_name="P", last_name="2"
+        )
+        self.other = User.objects.create_user(
+            username="other2", email="other2@example.com", password="pass12345",
+            phone="09120003002", national_id="8000000002", first_name="O", last_name="2"
+        )
+        self.superior = User.objects.create_user(
+            username="sup2", email="sup2@example.com", password="pass12345",
+            phone="09120003003", national_id="8000000003", first_name="S", last_name="2"
+        )
+
+        ct = ContentType.objects.get_for_model(SceneReport)
+        self.police.user_permissions.add(Permission.objects.get(content_type=ct, codename="create_scene_report"))
+        self.superior.user_permissions.add(Permission.objects.get(content_type=ct, codename="approve_scene_report"))
+
+    def test_scene_report_witnesses_persist(self):
+        self.client.force_authenticate(self.police)
+        res = self.client.post(
+            reverse("scene-report-list"),
+            {
+                "title": "SR",
+                "description": "Desc",
+                "crime_level": "level_1",
+                "scene_datetime": timezone.now().isoformat(),
+                "witnesses": [
+                    {"phone": "09121111111", "national_id": "1231231231"},
+                    {"phone": "09122222222", "national_id": "3213213213"},
+                ],
+            },
+            format="json",
+        )
+        self.assertEqual(res.status_code, 201)
+        sr_id = res.data["id"]
+
+        res_detail = self.client.get(reverse("scene-report-detail", kwargs={"pk": sr_id}))
+        self.assertEqual(res_detail.status_code, 200)
+        self.assertEqual(len(res_detail.data["witnesses"]), 2)
+
+    def test_scene_approve_is_idempotent(self):
+        self.client.force_authenticate(self.police)
+        sr_id = self.client.post(
+            reverse("scene-report-list"),
+            {
+                "title": "SR2",
+                "description": "Desc2",
+                "crime_level": "level_1",
+                "scene_datetime": timezone.now().isoformat(),
+            },
+            format="json",
+        ).data["id"]
+
+        self.client.force_authenticate(self.superior)
+        first = self.client.post(reverse("scene-report-approve", kwargs={"pk": sr_id}), {}, format="json")
+        self.assertEqual(first.status_code, 200)
+
+        second = self.client.post(reverse("scene-report-approve", kwargs={"pk": sr_id}), {}, format="json")
+        self.assertEqual(second.status_code, 400)
+
+    def test_scene_report_scoping_other_user_cannot_view(self):
+        self.client.force_authenticate(self.police)
+        sr_id = self.client.post(
+            reverse("scene-report-list"),
+            {
+                "title": "SR3",
+                "description": "Desc3",
+                "crime_level": "level_1",
+                "scene_datetime": timezone.now().isoformat(),
+            },
+            format="json",
+        ).data["id"]
+
+        self.client.force_authenticate(self.other)
+        res = self.client.get(reverse("scene-report-detail", kwargs={"pk": sr_id}))
+        self.assertIn(res.status_code, [403, 404])

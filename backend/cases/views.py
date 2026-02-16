@@ -9,8 +9,8 @@ from rest_framework.viewsets import ModelViewSet
 
 from drf_spectacular.utils import extend_schema
 
-from .models import Case, CaseParticipant, Complaint, ComplaintComplainant
-from .constants import CaseStatus, ComplaintStatus, ComplaintComplainantStatus
+from .models import Case, CaseParticipant, Complaint, ComplaintComplainant, SceneReport
+from .constants import CaseStatus, ComplaintStatus, ComplaintComplainantStatus, SceneReportStatus
 from .serializers import (
     CaseListSerializer,
     CaseDetailSerializer,
@@ -21,8 +21,21 @@ from .serializers import (
     ComplaintResubmitSerializer,
     CadetReviewSerializer,
     OfficerReviewSerializer,
+    SceneReportCreateSerializer,
+    SceneReportListSerializer,
+    SceneReportDetailSerializer,
+    SceneReportApproveSerializer,
 )
-from .permissions import CanViewCase, CanCreateCase, CanViewComplaint, CanCadetReviewComplaint, CanOfficerReviewComplaint
+from .permissions import (
+    CanViewCase,
+    CanCreateCase,
+    CanViewComplaint,
+    CanCadetReviewComplaint,
+    CanOfficerReviewComplaint,
+    CanCreateSceneReport,
+    CanApproveSceneReport,
+    CanViewSceneReport,
+)
 
 
 class CaseViewSet(ModelViewSet):
@@ -267,3 +280,79 @@ class ComplaintViewSet(viewsets.ModelViewSet):
             complaint.save()
 
         return Response(ComplaintDetailSerializer(complaint).data, status=status.HTTP_200_OK)
+
+
+class SceneReportViewSet(ModelViewSet):
+    queryset = SceneReport.objects.all().order_by("-created_at")
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        request=SceneReportCreateSerializer,
+        responses={201: SceneReportDetailSerializer},
+    )
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)  # this is SceneReportCreateSerializer
+        serializer.is_valid(raise_exception=True)
+        scene_report = serializer.save()
+
+        # Return a representation serializer, not the input serializer
+        output = SceneReportDetailSerializer(scene_report, context={"request": request}).data
+        return Response(output, status=status.HTTP_201_CREATED)
+
+    def get_queryset(self):
+        user = self.request.user
+        qs = super().get_queryset()
+
+        if user.has_perm("cases.view_all_scene_reports") or user.has_perm("cases.approve_scene_report"):
+            return qs
+
+        return qs.filter(created_by=user)
+
+    def get_permissions(self):
+        if self.action == "create":
+            return [IsAuthenticated(), CanCreateSceneReport()]
+        if self.action == "approve":
+            return [IsAuthenticated(), CanApproveSceneReport()]
+        if self.action in ["retrieve"]:
+            return [IsAuthenticated(), CanViewSceneReport()]
+        return [IsAuthenticated()]
+
+    def get_serializer_class(self):
+        if self.action == "create":
+            return SceneReportCreateSerializer
+        if self.action == "list":
+            return SceneReportListSerializer
+        if self.action == "retrieve":
+            return SceneReportDetailSerializer
+        if self.action == "approve":
+            return SceneReportApproveSerializer
+        return SceneReportDetailSerializer
+
+    @extend_schema(
+        request=SceneReportApproveSerializer,
+        responses={200: SceneReportDetailSerializer},
+        description="Approve a pending scene report (superior approval).",
+    )
+    @action(detail=True, methods=["post"], url_path="approve")
+    def approve(self, request, pk=None):
+        scene_report = self.get_object()
+
+        if scene_report.status == SceneReportStatus.APPROVED:
+            return Response(
+                {"detail": "Scene report is already approved.", "code": "already_approved"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # approve
+        scene_report.status = SceneReportStatus.APPROVED
+        scene_report.approved_by = request.user
+        scene_report.approved_at = timezone.now()
+        scene_report.save(update_fields=["status", "approved_by", "approved_at"])
+
+        # activate case
+        case = scene_report.case
+        case.status = CaseStatus.ACTIVE
+        case.formed_at = timezone.now()
+        case.save(update_fields=["status", "formed_at"])
+
+        return Response(SceneReportDetailSerializer(scene_report).data, status=status.HTTP_200_OK)
