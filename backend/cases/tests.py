@@ -8,16 +8,11 @@ from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
 
-from .constants import CrimeLevel
-from .models import Case, CaseParticipant
+from .constants import CrimeLevel, ComplaintStatus
+from .models import Case, CaseParticipant, Complaint
 
 
 def extract_list_payload(res):
-    """
-    Works with both paginated and non-paginated DRF responses.
-    - Non-paginated: res.data is a list
-    - Paginated: res.data is a dict with 'results'
-    """
     if isinstance(res.data, dict) and "results" in res.data:
         return res.data["results"]
     return res.data
@@ -261,3 +256,165 @@ class CaseAPITests(APITestCase):
 
         with self.assertRaises(IntegrityError):
             CaseParticipant.objects.create(case=c, user=self.user1)
+
+
+User = get_user_model()
+
+
+class ComplaintWorkflowTests(APITestCase):
+    def setUp(self):
+        self.complainant = User.objects.create_user(
+            username="u1",
+            email="u1@example.com",
+            password="pass12345",
+            phone="09120000001",
+            national_id="1111111111",
+            first_name="A",
+            last_name="B",
+        )
+        self.cadet = User.objects.create_user(
+            username="cadet",
+            email="cadet@example.com",
+            password="pass12345",
+            phone="09120000002",
+            national_id="2222222222",
+            first_name="C",
+            last_name="D",
+        )
+        self.officer = User.objects.create_user(
+            username="officer",
+            email="officer@example.com",
+            password="pass12345",
+            phone="09120000003",
+            national_id="3333333333",
+            first_name="E",
+            last_name="F",
+        )
+
+        ct = ContentType.objects.get_for_model(Complaint)
+        cadet_perm = Permission.objects.get(content_type=ct, codename="cadet_review_complaint")
+        officer_perm = Permission.objects.get(content_type=ct, codename="officer_review_complaint")
+
+        self.cadet.user_permissions.add(cadet_perm)
+        self.officer.user_permissions.add(officer_perm)
+
+    def test_complainant_can_create_complaint(self):
+        self.client.force_authenticate(self.complainant)
+        url = reverse("complaint-list")
+        res = self.client.post(
+            url,
+            {"title": "Test", "description": "Desc", "crime_level": CrimeLevel.LEVEL_1},
+            format="json",
+        )
+        self.assertEqual(res.status_code, 201)
+        self.assertEqual(res.data["title"], "Test")
+
+    def test_cadet_reject_requires_message(self):
+        self.client.force_authenticate(self.complainant)
+        c = self.client.post(
+            reverse("complaint-list"),
+            {"title": "T", "description": "D", "crime_level": CrimeLevel.LEVEL_1},
+            format="json",
+        ).data
+        cid = c["id"]
+
+        self.client.force_authenticate(self.cadet)
+        url = reverse("complaint-cadet-review", kwargs={"pk": cid})
+        res = self.client.post(url, {"decision": "reject"}, format="json")
+        self.assertEqual(res.status_code, 400)
+
+        res2 = self.client.post(url, {"decision": "reject", "message": "Missing info"}, format="json")
+        self.assertEqual(res2.status_code, 200)
+        self.assertEqual(res2.data["current_status"], ComplaintStatus.CADET_REJECTED)
+
+    def test_invalid_after_three_resubmits(self):
+        self.client.force_authenticate(self.complainant)
+        cid = self.client.post(
+            reverse("complaint-list"),
+            {"title": "T", "description": "D", "crime_level": CrimeLevel.LEVEL_1},
+            format="json",
+        ).data["id"]
+
+        # cadet reject first time
+        self.client.force_authenticate(self.cadet)
+        self.client.post(
+            reverse("complaint-cadet-review", kwargs={"pk": cid}),
+            {"decision": "reject", "message": "Bad"},
+            format="json",
+        )
+
+        # resubmit 1
+        self.client.force_authenticate(self.complainant)
+        self.client.patch(reverse("complaint-resubmit", kwargs={"pk": cid}), {"description": "D1"}, format="json")
+
+        # reject again
+        self.client.force_authenticate(self.cadet)
+        self.client.post(
+            reverse("complaint-cadet-review", kwargs={"pk": cid}),
+            {"decision": "reject", "message": "Bad2"},
+            format="json",
+        )
+
+        # resubmit 2
+        self.client.force_authenticate(self.complainant)
+        self.client.patch(reverse("complaint-resubmit", kwargs={"pk": cid}), {"description": "D2"}, format="json")
+
+        # reject again
+        self.client.force_authenticate(self.cadet)
+        self.client.post(
+            reverse("complaint-cadet-review", kwargs={"pk": cid}),
+            {"decision": "reject", "message": "Bad3"},
+            format="json",
+        )
+
+        # resubmit 3 => INVALID
+        self.client.force_authenticate(self.complainant)
+        res = self.client.patch(reverse("complaint-resubmit", kwargs={"pk": cid}), {"description": "D3"}, format="json")
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res.data["current_status"], ComplaintStatus.INVALID)
+
+        # further resubmit blocked
+        res2 = self.client.patch(reverse("complaint-resubmit", kwargs={"pk": cid}), {"description": "D4"}, format="json")
+        self.assertIn(res2.status_code, [400, 403])
+
+    def test_officer_approve_creates_case_link(self):
+        self.client.force_authenticate(self.complainant)
+        cid = self.client.post(
+            reverse("complaint-list"),
+            {"title": "T", "description": "D", "crime_level": CrimeLevel.LEVEL_1},
+            format="json",
+        ).data["id"]
+
+        self.client.force_authenticate(self.cadet)
+        self.client.post(reverse("complaint-cadet-review", kwargs={"pk": cid}), {"decision": "approve"}, format="json")
+
+        self.client.force_authenticate(self.officer)
+        res = self.client.post(reverse("complaint-officer-review", kwargs={"pk": cid}), {"decision": "approve"}, format="json")
+        self.assertEqual(res.status_code, 200)
+        self.assertIsNotNone(res.data.get("case_id"))
+
+    def test_officer_reject_goes_back_to_cadet(self):
+        self.client.force_authenticate(self.complainant)
+        cid = self.client.post(
+            reverse("complaint-list"),
+            {"title": "T", "description": "D", "crime_level": CrimeLevel.LEVEL_1},
+            format="json",
+        ).data["id"]
+
+        self.client.force_authenticate(self.cadet)
+        self.client.post(reverse("complaint-cadet-review", kwargs={"pk": cid}), {"decision": "approve"}, format="json")
+
+        self.client.force_authenticate(self.officer)
+        res = self.client.post(
+            reverse("complaint-officer-review", kwargs={"pk": cid}),
+            {"decision": "reject", "message": "Not enough"},
+            format="json",
+        )
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res.data["current_status"], ComplaintStatus.OFFICER_REJECTED)
+
+        # cadet can review again after officer rejection
+        self.client.force_authenticate(self.cadet)
+        res2 = self.client.post(reverse("complaint-cadet-review", kwargs={"pk": cid}), {"decision": "approve"}, format="json")
+        self.assertEqual(res2.status_code, 200)
+        self.assertEqual(res2.data["current_status"], ComplaintStatus.CADET_APPROVED)
