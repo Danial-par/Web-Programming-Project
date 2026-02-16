@@ -36,3 +36,8 @@ class ComplaintComplainantStatus(models.TextChoices):
     PENDING = "pending", "Pending"
     APPROVED = "approved", "Approved"
     REJECTED = "rejected", "Rejected"
+
+
+class SceneReportStatus(models.TextChoices):
+    PENDING = "pending", "Pending Approval"
+    APPROVED = "approved", "Approved"
