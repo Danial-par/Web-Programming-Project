@@ -23,6 +23,7 @@ INSTALLED_APPS = [
     'accounts',
     'cases',
     'evidence',
+    'investigations',
 ]
 
 AUTH_USER_MODEL = 'accounts.User' 

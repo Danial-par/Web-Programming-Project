@@ -20,6 +20,7 @@ urlpatterns = [
     path('api/', include('accounts.urls')),
     path("api/", include("cases.urls")),
     path("api/", include("evidence.urls")),
+    path("api/", include("investigations.urls")),
 ]
 
 if settings.DEBUG:
