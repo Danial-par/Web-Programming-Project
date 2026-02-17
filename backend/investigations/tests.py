@@ -9,7 +9,10 @@ from rest_framework.test import APITestCase
 from cases.constants import CrimeLevel
 from cases.models import Case, CaseParticipant
 
+from evidence.models import Evidence, EvidenceType
+
 from .models import BoardItem
+from .models import Notification
 
 
 User = get_user_model()
@@ -116,3 +119,60 @@ class DetectiveBoardItemTests(InvestigationsBaseAPITest):
         }
         res = self.client.post(create_url, payload, format="json")
         self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
+
+
+class EvidenceNotificationTests(InvestigationsBaseAPITest):
+    @classmethod
+    def setUpTestData(cls):
+        cls.detective = User.objects.create_user(
+            username="det2",
+            email="det2@example.com",
+            password="pass12345",
+            phone="09120002000",
+            national_id="2000000000",
+            first_name="Det",
+            last_name="Two",
+        )
+        cls.creator = User.objects.create_user(
+            username="creator2",
+            email="creator2@example.com",
+            password="pass12345",
+            phone="09120002001",
+            national_id="2000000001",
+            first_name="Creator",
+            last_name="Two",
+        )
+
+        cls.case = Case.objects.create(
+            title="Notif Case",
+            description="Desc",
+            crime_level=CrimeLevel.LEVEL_2,
+            created_by=cls.creator,
+            formed_at=timezone.now(),
+            assigned_to=cls.detective,
+        )
+
+        InvestigationsBaseAPITest.grant_perm(cls.creator, Evidence, "add_evidence")
+
+        cls.evidence_create_url = reverse("evidence-list")
+
+    def authenticate(self, user):
+        self.client.force_authenticate(user=user)
+
+    def test_evidence_creation_triggers_notification_for_assigned_detective(self):
+        self.authenticate(self.creator)
+
+        payload = {
+            "case": self.case.id,
+            "type": EvidenceType.OTHER,
+            "title": "New clue",
+            "description": "Something interesting",
+        }
+
+        res = self.client.post(self.evidence_create_url, payload, format="json")
+        self.assertEqual(res.status_code, status.HTTP_201_CREATED)
+
+        self.assertEqual(Notification.objects.filter(user=self.detective, case=self.case).count(), 1)
+        notif = Notification.objects.get(user=self.detective, case=self.case)
+        self.assertIn("New evidence", notif.message)
+        self.assertIn("New clue", notif.message)
