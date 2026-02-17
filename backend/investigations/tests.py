@@ -6,7 +6,7 @@ from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
 
-from cases.constants import CrimeLevel
+from cases.constants import CrimeLevel, CaseStatus
 from cases.models import Case, CaseParticipant
 
 from evidence.models import Evidence, EvidenceType
@@ -146,6 +146,7 @@ class EvidenceNotificationTests(InvestigationsBaseAPITest):
             title="Notif Case",
             description="Desc",
             crime_level=CrimeLevel.LEVEL_2,
+            status=CaseStatus.ACTIVE,
             created_by=cls.creator,
             formed_at=timezone.now(),
             assigned_to=cls.detective,
