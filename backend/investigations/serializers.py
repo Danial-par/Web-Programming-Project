@@ -10,6 +10,8 @@ from .models import (
     BoardItem,
     BoardItemKind,
     DetectiveBoard,
+    CaseSuspect,
+    CaseSuspectStatus,
     Notification,
 )
 
@@ -213,3 +215,66 @@ class NotificationSerializer(serializers.ModelSerializer):
         model = Notification
         fields = ["id", "case", "case_title", "message", "created_at", "read_at"]
         read_only_fields = fields
+
+
+class CaseSuspectSerializer(serializers.ModelSerializer):
+    proposed_by_username = serializers.CharField(source="proposed_by.username", read_only=True)
+    reviewed_by_username = serializers.CharField(source="reviewed_by.username", read_only=True)
+
+    class Meta:
+        model = CaseSuspect
+        fields = [
+            "id",
+            "case",
+            "first_name",
+            "last_name",
+            "national_id",
+            "phone",
+            "notes",
+            "proposed_by",
+            "proposed_by_username",
+            "proposed_at",
+            "status",
+            "sergeant_message",
+            "reviewed_by",
+            "reviewed_by_username",
+            "reviewed_at",
+        ]
+        read_only_fields = fields
+
+
+class CaseSuspectProposeSerializer(serializers.Serializer):
+    first_name = serializers.CharField(max_length=150)
+    last_name = serializers.CharField(max_length=150)
+    national_id = serializers.CharField(max_length=32, required=False, allow_blank=True)
+    phone = serializers.CharField(max_length=32, required=False, allow_blank=True)
+    notes = serializers.CharField(required=False, allow_blank=True)
+
+    def validate(self, attrs):
+        nid = (attrs.get("national_id") or "").strip()
+        phone = (attrs.get("phone") or "").strip()
+
+        if not nid and not phone:
+            raise serializers.ValidationError(
+                {"non_field_errors": "Provide at least one of national_id or phone."}
+            )
+
+        attrs["national_id"] = nid
+        attrs["phone"] = phone
+        attrs["notes"] = (attrs.get("notes") or "").strip()
+        return attrs
+
+
+class CaseSuspectReviewSerializer(serializers.Serializer):
+    decision = serializers.ChoiceField(choices=["approve", "reject"])
+    message = serializers.CharField(required=False, allow_blank=True)
+
+    def validate(self, attrs):
+        decision = attrs["decision"]
+        message = (attrs.get("message") or "").strip()
+
+        if decision == "reject" and not message:
+            raise serializers.ValidationError({"message": "Message is required when rejecting."})
+
+        attrs["message"] = message
+        return attrs

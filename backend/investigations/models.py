@@ -148,3 +148,61 @@ class Notification(models.Model):
 
     def __str__(self) -> str:
         return f"Notification(user_id={self.user_id}, case_id={self.case_id})"
+
+
+class CaseSuspectStatus(models.TextChoices):
+    PROPOSED = "proposed", "Proposed"
+    APPROVED = "approved", "Approved"
+    REJECTED = "rejected", "Rejected"
+
+
+class CaseSuspect(models.Model):
+    """A suspect proposed by a detective and reviewed by a sergeant."""
+
+    case = models.ForeignKey(
+        "cases.Case",
+        on_delete=models.CASCADE,
+        related_name="suspects",
+    )
+
+    # suspect identity fields
+    first_name = models.CharField(max_length=150)
+    last_name = models.CharField(max_length=150)
+    national_id = models.CharField(max_length=32, blank=True, default="")
+    phone = models.CharField(max_length=32, blank=True, default="")
+    notes = models.TextField(blank=True, default="")
+
+    proposed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name="suspects_proposed",
+    )
+    proposed_at = models.DateTimeField(auto_now_add=True)
+
+    status = models.CharField(
+        max_length=16,
+        choices=CaseSuspectStatus.choices,
+        default=CaseSuspectStatus.PROPOSED,
+    )
+
+    sergeant_message = models.TextField(blank=True, default="")
+
+    reviewed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="suspects_reviewed",
+    )
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-proposed_at"]
+        permissions = [
+            ("propose_case_suspect", "Can propose a suspect for a case"),
+            ("review_case_suspect", "Can review a proposed suspect for a case"),
+        ]
+
+    def __str__(self) -> str:
+        return f"CaseSuspect(case_id={self.case_id}, name={self.first_name} {self.last_name})"

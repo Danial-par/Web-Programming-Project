@@ -7,6 +7,8 @@ from .views import (
     CaseBoardItemCreateView,
     CaseBoardItemDetailView,
     CaseBoardView,
+    CaseSuspectProposeView,
+    CaseSuspectReviewView,
     NotificationViewSet,
 )
 
@@ -36,5 +38,17 @@ urlpatterns = [
         "cases/<int:case_id>/board/connections/<int:connection_id>/",
         CaseBoardConnectionDetailView.as_view(),
         name="case-board-connection-detail",
+    ),
+
+    # Suspects
+    path(
+        "cases/<int:case_id>/suspects/propose/",
+        CaseSuspectProposeView.as_view(),
+        name="case-suspect-propose",
+    ),
+    path(
+        "cases/<int:case_id>/suspects/<int:suspect_id>/review/",
+        CaseSuspectReviewView.as_view(),
+        name="case-suspect-review",
     ),
 ] + router.urls

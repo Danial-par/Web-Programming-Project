@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from django.utils import timezone
 from django.db import transaction
 from django.shortcuts import get_object_or_404
 from rest_framework import status, viewsets
@@ -12,7 +13,14 @@ from drf_spectacular.utils import OpenApiExample, extend_schema
 
 from cases.models import Case
 
-from .models import BoardConnection, BoardItem, DetectiveBoard, Notification
+from .models import (
+    BoardConnection,
+    BoardItem,
+    CaseSuspect,
+    CaseSuspectStatus,
+    DetectiveBoard,
+    Notification,
+)
 from .permissions import user_can_access_case, user_is_assigned_detective
 from .serializers import (
     BoardConnectionCreateSerializer,
@@ -22,6 +30,9 @@ from .serializers import (
     BoardItemSerializer,
     BoardStateSerializer,
     BoardStateWriteSerializer,
+    CaseSuspectProposeSerializer,
+    CaseSuspectReviewSerializer,
+    CaseSuspectSerializer,
     NotificationSerializer,
 )
 
@@ -348,3 +359,111 @@ class NotificationViewSet(viewsets.ViewSet):
 
         data = NotificationSerializer(qs.order_by("-created_at"), many=True).data
         return Response(data, status=status.HTTP_200_OK)
+
+
+class CaseSuspectProposeView(APIView):
+    """Detective proposes a suspect for a case."""
+
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        request=CaseSuspectProposeSerializer,
+        responses={201: CaseSuspectSerializer},
+        description="Propose a new suspect for the given case (detective-only).",
+        examples=[
+            OpenApiExample(
+                "Propose suspect",
+                value={
+                    "first_name": "John",
+                    "last_name": "Doe",
+                    "national_id": "1234567890",
+                    "phone": "09120000000",
+                    "notes": "Seen near the scene",
+                },
+                request_only=True,
+            )
+        ],
+    )
+    def post(self, request, case_id: int):
+        case = _get_case_or_404_for_user(request.user, case_id)
+
+        if not _require_assigned_detective(request.user, case):
+            return Response(
+                {"detail": "Only the assigned detective can propose suspects.", "code": "forbidden"},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        if not request.user.has_perm("investigations.propose_case_suspect"):
+            return Response(
+                {"detail": "Missing permission: investigations.propose_case_suspect", "code": "forbidden"},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        serializer = CaseSuspectProposeSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        suspect = CaseSuspect.objects.create(
+            case=case,
+            proposed_by=request.user,
+            **serializer.validated_data,
+        )
+
+        return Response(CaseSuspectSerializer(suspect).data, status=status.HTTP_201_CREATED)
+
+
+class CaseSuspectReviewView(APIView):
+    """Sergeant reviews (approve/reject) a proposed suspect."""
+
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        request=CaseSuspectReviewSerializer,
+        responses={200: CaseSuspectSerializer},
+        description="Review a proposed suspect for a case (sergeant-only).",
+        examples=[
+            OpenApiExample(
+                "Approve",
+                value={"decision": "approve", "message": "Looks solid. Proceed."},
+                request_only=True,
+            ),
+            OpenApiExample(
+                "Reject",
+                value={"decision": "reject", "message": "Insufficient evidence."},
+                request_only=True,
+            ),
+        ],
+    )
+    def post(self, request, case_id: int, suspect_id: int):
+        # Allow sergeants to reach this endpoint without being a participant.
+        if request.user.has_perm("investigations.review_case_suspect") or request.user.has_perm("cases.view_all_cases"):
+            case = get_object_or_404(Case, id=case_id)
+        else:
+            case = _get_case_or_404_for_user(request.user, case_id)
+
+        if not request.user.has_perm("investigations.review_case_suspect"):
+            return Response(
+                {"detail": "Missing permission: investigations.review_case_suspect", "code": "forbidden"},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        suspect = get_object_or_404(CaseSuspect, id=suspect_id, case=case)
+
+        if suspect.status != CaseSuspectStatus.PROPOSED:
+            return Response(
+                {"detail": "Suspect already reviewed.", "code": "already_reviewed"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        serializer = CaseSuspectReviewSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        decision = serializer.validated_data["decision"]
+        message = serializer.validated_data.get("message", "")
+
+        suspect.status = (
+            CaseSuspectStatus.APPROVED if decision == "approve" else CaseSuspectStatus.REJECTED
+        )
+        suspect.sergeant_message = message
+        suspect.reviewed_by = request.user
+        suspect.reviewed_at = timezone.now()
+        suspect.save(update_fields=["status", "sergeant_message", "reviewed_by", "reviewed_at"])
+
+        return Response(CaseSuspectSerializer(suspect).data, status=status.HTTP_200_OK)
