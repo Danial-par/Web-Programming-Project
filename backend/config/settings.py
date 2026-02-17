@@ -22,6 +22,7 @@ INSTALLED_APPS = [
     'common',
     'accounts',
     'cases',
+    'evidence',
 ]
 
 AUTH_USER_MODEL = 'accounts.User' 
