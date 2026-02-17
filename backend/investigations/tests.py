@@ -11,8 +11,7 @@ from cases.models import Case, CaseParticipant
 
 from evidence.models import Evidence, EvidenceType
 
-from .models import BoardItem
-from .models import Notification
+from .models import BoardItem, CaseSuspect, CaseSuspectStatus, Notification
 
 
 User = get_user_model()
@@ -176,3 +175,124 @@ class EvidenceNotificationTests(InvestigationsBaseAPITest):
         notif = Notification.objects.get(user=self.detective, case=self.case)
         self.assertIn("New evidence", notif.message)
         self.assertIn("New clue", notif.message)
+
+
+class CaseSuspectFlowTests(InvestigationsBaseAPITest):
+    @classmethod
+    def setUpTestData(cls):
+        cls.detective = User.objects.create_user(
+            username="det3",
+            email="det3@example.com",
+            password="pass12345",
+            phone="09120003000",
+            national_id="3000000000",
+            first_name="Det",
+            last_name="Three",
+        )
+        cls.creator = User.objects.create_user(
+            username="creator3",
+            email="creator3@example.com",
+            password="pass12345",
+            phone="09120003001",
+            national_id="3000000001",
+            first_name="Creator",
+            last_name="Three",
+        )
+        cls.sergeant = User.objects.create_user(
+            username="sergeant",
+            email="sergeant@example.com",
+            password="pass12345",
+            phone="09120003002",
+            national_id="3000000002",
+            first_name="Ser",
+            last_name="Geant",
+        )
+
+        cls.case = Case.objects.create(
+            title="Suspect Case",
+            description="Desc",
+            crime_level=CrimeLevel.LEVEL_1,
+            created_by=cls.creator,
+            formed_at=timezone.now(),
+            assigned_to=cls.detective,
+        )
+
+        # Detective can propose
+        InvestigationsBaseAPITest.grant_perm(cls.detective, CaseSuspect, "propose_case_suspect")
+
+        # Sergeant can review
+        InvestigationsBaseAPITest.grant_perm(cls.sergeant, CaseSuspect, "review_case_suspect")
+
+        cls.propose_url = reverse("case-suspect-propose", kwargs={"case_id": cls.case.id})
+
+    def authenticate(self, user):
+        self.client.force_authenticate(user=user)
+
+    def test_detective_can_propose_and_sergeant_can_approve(self):
+        # Detective proposes
+        self.authenticate(self.detective)
+        payload = {
+            "first_name": "John",
+            "last_name": "Doe",
+            "national_id": "1234567890",
+            "phone": "09120009999",
+            "notes": "Seen near the scene",
+        }
+        res = self.client.post(self.propose_url, payload, format="json")
+        self.assertEqual(res.status_code, status.HTTP_201_CREATED)
+        suspect_id = res.data["id"]
+
+        # Sergeant approves
+        review_url = reverse(
+            "case-suspect-review",
+            kwargs={"case_id": self.case.id, "suspect_id": suspect_id},
+        )
+
+        self.authenticate(self.sergeant)
+        res2 = self.client.post(review_url, {"decision": "approve", "message": "Ok"}, format="json")
+        self.assertEqual(res2.status_code, status.HTTP_200_OK)
+        self.assertEqual(res2.data["status"], CaseSuspectStatus.APPROVED)
+        self.assertEqual(res2.data["sergeant_message"], "Ok")
+
+        suspect = CaseSuspect.objects.get(id=suspect_id)
+        self.assertEqual(suspect.status, CaseSuspectStatus.APPROVED)
+        self.assertEqual(suspect.reviewed_by_id, self.sergeant.id)
+
+    def test_non_assigned_user_cannot_propose_even_with_permission(self):
+        user = User.objects.create_user(
+            username="not_assigned",
+            email="not_assigned@example.com",
+            password="pass12345",
+            phone="09120003003",
+            national_id="3000000003",
+            first_name="Not",
+            last_name="Assigned",
+        )
+        CaseParticipant.objects.create(case=self.case, user=user, is_complainant=False)
+        InvestigationsBaseAPITest.grant_perm(user, CaseSuspect, "propose_case_suspect")
+
+        self.authenticate(user)
+        res = self.client.post(
+            self.propose_url,
+            {"first_name": "A", "last_name": "B", "national_id": "1"},
+            format="json",
+        )
+        self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_detective_cannot_review_without_sergeant_permission(self):
+        # create a suspect first
+        self.authenticate(self.detective)
+        res = self.client.post(
+            self.propose_url,
+            {"first_name": "X", "last_name": "Y", "national_id": "2"},
+            format="json",
+        )
+        self.assertEqual(res.status_code, status.HTTP_201_CREATED)
+        suspect_id = res.data["id"]
+
+        review_url = reverse(
+            "case-suspect-review",
+            kwargs={"case_id": self.case.id, "suspect_id": suspect_id},
+        )
+        res2 = self.client.post(review_url, {"decision": "approve"}, format="json")
+        self.assertEqual(res2.status_code, status.HTTP_403_FORBIDDEN)
