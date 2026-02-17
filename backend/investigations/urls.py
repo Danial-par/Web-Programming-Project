@@ -7,10 +7,12 @@ from .views import (
     CaseBoardItemCreateView,
     CaseBoardItemDetailView,
     CaseBoardView,
+    NotificationViewSet,
 )
 
 
 router = DefaultRouter()
+router.register(r"notifications", NotificationViewSet, basename="notification")
 
 urlpatterns = [
     # Detective board

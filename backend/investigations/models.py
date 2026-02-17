@@ -4,6 +4,9 @@ from django.db import models
 from django.db.models import Q
 
 
+from django.conf import settings
+
+
 class DetectiveBoard(models.Model):
     """Detective board for a Case.
 
@@ -118,3 +121,30 @@ class BoardConnection(models.Model):
 
     def __str__(self) -> str:
         return f"BoardConnection({self.from_item_id}->{self.to_item_id})"
+
+
+class Notification(models.Model):
+    """A per-user notification (scoped to a Case)."""
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="notifications",
+    )
+
+    case = models.ForeignKey(
+        "cases.Case",
+        on_delete=models.CASCADE,
+        related_name="notifications",
+    )
+
+    message = models.TextField()
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    read_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self) -> str:
+        return f"Notification(user_id={self.user_id}, case_id={self.case_id})"

@@ -10,6 +10,7 @@ from .models import (
     BoardItem,
     BoardItemKind,
     DetectiveBoard,
+    Notification,
 )
 
 
@@ -203,3 +204,12 @@ class BoardStateWriteSerializer(serializers.Serializer):
             )
 
         return board
+
+
+class NotificationSerializer(serializers.ModelSerializer):
+    case_title = serializers.CharField(source="case.title", read_only=True)
+
+    class Meta:
+        model = Notification
+        fields = ["id", "case", "case_title", "message", "created_at", "read_at"]
+        read_only_fields = fields

@@ -12,7 +12,7 @@ from drf_spectacular.utils import OpenApiExample, extend_schema
 
 from cases.models import Case
 
-from .models import BoardConnection, BoardItem, DetectiveBoard
+from .models import BoardConnection, BoardItem, DetectiveBoard, Notification
 from .permissions import user_can_access_case, user_is_assigned_detective
 from .serializers import (
     BoardConnectionCreateSerializer,
@@ -22,6 +22,7 @@ from .serializers import (
     BoardItemSerializer,
     BoardStateSerializer,
     BoardStateWriteSerializer,
+    NotificationSerializer,
 )
 
 
@@ -330,4 +331,20 @@ class CaseBoardConnectionDetailView(APIView):
 
 
 class NotificationViewSet(viewsets.ViewSet):
-    pass
+    """List notifications for the current user."""
+
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        responses={200: NotificationSerializer(many=True)},
+        description="List notifications for the current user. Use ?unread=1 to filter unread notifications.",
+    )
+    def list(self, request):
+        qs = Notification.objects.filter(user=request.user).select_related("case")
+
+        unread = request.query_params.get("unread")
+        if unread in {"1", "true", "True"}:
+            qs = qs.filter(read_at__isnull=True)
+
+        data = NotificationSerializer(qs.order_by("-created_at"), many=True).data
+        return Response(data, status=status.HTTP_200_OK)
