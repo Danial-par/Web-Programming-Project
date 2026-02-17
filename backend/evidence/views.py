@@ -280,6 +280,12 @@ class EvidenceViewSet(ModelViewSet):
         serializer.is_valid(raise_exception=True)
 
         evidence = serializer.save(created_by=request.user)
+
+        # Step 7: notify assigned detective (if any)
+        from investigations.services import notify_assigned_detective_on_new_evidence
+
+        notify_assigned_detective_on_new_evidence(evidence)
+
         output = EvidenceSerializer(evidence, context={"request": request}).data
         return Response(output, status=status.HTTP_201_CREATED)
 
