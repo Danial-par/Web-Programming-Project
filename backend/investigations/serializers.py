@@ -4,6 +4,7 @@ from django.db import transaction
 from rest_framework import serializers
 
 from evidence.models import Evidence
+from cases.constants import CRIME_LEVEL_DEGREE
 
 from .models import (
     BoardConnection,
@@ -14,6 +15,9 @@ from .models import (
     CaseSuspectStatus,
     Interrogation,
     Notification,
+    Reward,
+    Tip,
+    TipStatus,
 )
 
 
@@ -232,6 +236,7 @@ class CaseSuspectSerializer(serializers.ModelSerializer):
             "national_id",
             "phone",
             "notes",
+            "photo",
             "proposed_by",
             "proposed_by_username",
             "proposed_at",
@@ -336,3 +341,96 @@ class ChiefReviewSubmitSerializer(serializers.Serializer):
             raise serializers.ValidationError({"chief_message": "Message is required when rejecting."})
         attrs["chief_message"] = msg
         return attrs
+
+
+class MostWantedSuspectSerializer(serializers.Serializer):
+    suspect_id = serializers.IntegerField()
+    first_name = serializers.CharField()
+    last_name = serializers.CharField()
+    national_id = serializers.CharField(allow_blank=True)
+    phone = serializers.CharField(allow_blank=True)
+    photo = serializers.ImageField(allow_null=True)
+    max_days_wanted = serializers.IntegerField()
+    max_crime_degree = serializers.IntegerField()
+    ranking = serializers.IntegerField()
+    reward_amount = serializers.IntegerField()
+
+
+class TipSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Tip
+        fields = [
+            "id",
+            "user",
+            "case",
+            "suspect",
+            "details",
+            "status",
+            "officer_message",
+            "officer_reviewed_by",
+            "officer_reviewed_at",
+            "detective_message",
+            "detective_reviewed_by",
+            "detective_reviewed_at",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = fields
+
+
+class TipCreateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Tip
+        fields = ["case", "suspect", "details"]
+
+    def validate(self, attrs):
+        case = attrs.get("case")
+        suspect = attrs.get("suspect")
+        if not case and not suspect:
+            raise serializers.ValidationError(
+                {"non_field_errors": "Tip must reference at least a case or a suspect."}
+            )
+        if suspect and case and suspect.case_id != case.id:
+            raise serializers.ValidationError(
+                {"non_field_errors": "Suspect does not belong to the given case."}
+            )
+        attrs["details"] = (attrs.get("details") or "").strip()
+        return attrs
+
+
+class TipOfficerReviewSerializer(serializers.Serializer):
+    decision = serializers.ChoiceField(choices=["reject", "forward"])
+    message = serializers.CharField(required=False, allow_blank=True)
+
+    def validate(self, attrs):
+        decision = attrs["decision"]
+        message = (attrs.get("message") or "").strip()
+        if decision == "reject" and not message:
+            raise serializers.ValidationError({"message": "Message is required when rejecting."})
+        attrs["message"] = message
+        return attrs
+
+
+class TipDetectiveReviewSerializer(serializers.Serializer):
+    decision = serializers.ChoiceField(choices=["approve", "reject"])
+    message = serializers.CharField(required=False, allow_blank=True)
+
+    def validate(self, attrs):
+        decision = attrs["decision"]
+        message = (attrs.get("message") or "").strip()
+        if decision == "reject" and not message:
+            raise serializers.ValidationError({"message": "Message is required when rejecting."})
+        attrs["message"] = message
+        return attrs
+
+
+class RewardLookupSerializer(serializers.Serializer):
+    national_id = serializers.CharField(max_length=32)
+    reward_code = serializers.CharField(max_length=64)
+
+
+class RewardSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Reward
+        fields = ["reward_code", "reward_amount", "created_at"]
+        read_only_fields = fields

@@ -173,6 +173,8 @@ class CaseSuspect(models.Model):
     phone = models.CharField(max_length=32, blank=True, default="")
     notes = models.TextField(blank=True, default="")
 
+    photo = models.ImageField(upload_to="suspects/", null=True, blank=True)
+
     proposed_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
@@ -283,3 +285,95 @@ class Interrogation(models.Model):
 
     def __str__(self) -> str:
         return f"Interrogation(suspect_id={self.suspect_id})"
+
+
+class TipStatus(models.TextChoices):
+    SUBMITTED = "submitted", "Submitted"
+    OFFICER_REJECTED = "officer_rejected", "Officer Rejected"
+    FORWARDED_TO_DETECTIVE = "forwarded_to_detective", "Forwarded to Detective"
+    DETECTIVE_REJECTED = "detective_rejected", "Detective Rejected"
+    APPROVED = "approved", "Approved"
+
+
+class Tip(models.Model):
+    """Tip submitted by a base user about a case or suspect."""
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="tips",
+    )
+
+    case = models.ForeignKey(
+        "cases.Case",
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="tips",
+    )
+    suspect = models.ForeignKey(
+        CaseSuspect,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="tips",
+    )
+
+    details = models.TextField()
+
+    status = models.CharField(
+        max_length=32,
+        choices=TipStatus.choices,
+        default=TipStatus.SUBMITTED,
+    )
+
+    officer_message = models.TextField(blank=True, default="")
+    officer_reviewed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="tips_officer_reviewed",
+    )
+    officer_reviewed_at = models.DateTimeField(null=True, blank=True)
+
+    detective_message = models.TextField(blank=True, default="")
+    detective_reviewed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="tips_detective_reviewed",
+    )
+    detective_reviewed_at = models.DateTimeField(null=True, blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        permissions = [
+            ("officer_review_tip", "Can perform officer review on tips"),
+            ("detective_review_tip", "Can perform detective review on tips"),
+            ("reward_lookup", "Can lookup rewards by code and national id"),
+        ]
+
+    def __str__(self) -> str:
+        return f"Tip(id={self.id}, user_id={self.user_id})"
+
+
+class Reward(models.Model):
+    """Reward generated from an approved tip."""
+
+    tip = models.OneToOneField(
+        Tip,
+        on_delete=models.CASCADE,
+        related_name="reward",
+    )
+    reward_code = models.CharField(max_length=64, unique=True)
+    reward_amount = models.BigIntegerField()
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self) -> str:
+        return f"Reward(tip_id={self.tip_id}, code={self.reward_code})"
