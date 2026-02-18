@@ -18,3 +18,4 @@ psycopg2-binary>=2.9
 python-dotenv>=1.0
 gunicorn>=21.2
 djangorestframework-simplejwt>=5.3.1
+Pillow
