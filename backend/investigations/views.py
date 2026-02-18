@@ -19,6 +19,7 @@ from .models import (
     CaseSuspect,
     CaseSuspectStatus,
     DetectiveBoard,
+    Interrogation,
     Notification,
 )
 from .permissions import user_can_access_case, user_is_assigned_detective
@@ -33,7 +34,12 @@ from .serializers import (
     CaseSuspectProposeSerializer,
     CaseSuspectReviewSerializer,
     CaseSuspectSerializer,
+    CaptainDecisionSubmitSerializer,
+    ChiefReviewSubmitSerializer,
+    DetectiveInterrogationSubmitSerializer,
+    InterrogationSerializer,
     NotificationSerializer,
+    SergeantInterrogationSubmitSerializer,
 )
 
 
@@ -50,6 +56,15 @@ def _get_case_or_404_for_user(user, case_id: int) -> Case:
 
 def _require_assigned_detective(user, case: Case) -> bool:
     return user_is_assigned_detective(user, case) or user.has_perm("cases.view_all_cases")
+
+
+def _get_suspect_or_404(case: Case, suspect_id: int) -> CaseSuspect:
+    return get_object_or_404(CaseSuspect, id=suspect_id, case=case)
+
+
+def _get_or_create_interrogation(suspect: CaseSuspect) -> Interrogation:
+    obj, _ = Interrogation.objects.get_or_create(suspect=suspect)
+    return obj
 
 
 class CaseBoardView(APIView):
@@ -467,3 +482,203 @@ class CaseSuspectReviewView(APIView):
         suspect.save(update_fields=["status", "sergeant_message", "reviewed_by", "reviewed_at"])
 
         return Response(CaseSuspectSerializer(suspect).data, status=status.HTTP_200_OK)
+
+
+# -----------------------------------------------------------------------------
+# Interrogation + approval chain
+# -----------------------------------------------------------------------------
+
+
+class SuspectInterrogationDetectiveView(APIView):
+    """Detective submits/updates their score for a suspect interrogation."""
+
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        request=DetectiveInterrogationSubmitSerializer,
+        responses={200: InterrogationSerializer},
+        description="Assigned detective submits interrogation score (1..10).",
+    )
+    def post(self, request, case_id: int, suspect_id: int):
+        case = _get_case_or_404_for_user(request.user, case_id)
+
+        if not _require_assigned_detective(request.user, case):
+            return Response(
+                {"detail": "Only the assigned detective can submit interrogation score.", "code": "forbidden"},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        if not request.user.has_perm("investigations.submit_detective_interrogation"):
+            return Response(
+                {"detail": "Missing permission: investigations.submit_detective_interrogation", "code": "forbidden"},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        suspect = _get_suspect_or_404(case, suspect_id)
+        if suspect.status != CaseSuspectStatus.APPROVED:
+            return Response(
+                {"detail": "Interrogation is only allowed for approved suspects.", "code": "invalid_state"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        serializer = DetectiveInterrogationSubmitSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        obj = _get_or_create_interrogation(suspect)
+        obj.detective_score = serializer.validated_data["detective_score"]
+        obj.detective_submitted_by = request.user
+        obj.detective_submitted_at = timezone.now()
+        obj.save(update_fields=["detective_score", "detective_submitted_by", "detective_submitted_at", "updated_at"])
+
+        return Response(InterrogationSerializer(obj).data, status=status.HTTP_200_OK)
+
+
+class SuspectInterrogationSergeantView(APIView):
+    """Sergeant submits/updates their score for a suspect interrogation."""
+
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        request=SergeantInterrogationSubmitSerializer,
+        responses={200: InterrogationSerializer},
+        description="Sergeant submits interrogation score (1..10).",
+    )
+    def post(self, request, case_id: int, suspect_id: int):
+        # sergeants can access case without being a participant (similar to suspect review)
+        if request.user.has_perm("investigations.submit_sergeant_interrogation") or request.user.has_perm("cases.view_all_cases"):
+            case = get_object_or_404(Case, id=case_id)
+        else:
+            case = _get_case_or_404_for_user(request.user, case_id)
+
+        if not request.user.has_perm("investigations.submit_sergeant_interrogation"):
+            return Response(
+                {"detail": "Missing permission: investigations.submit_sergeant_interrogation", "code": "forbidden"},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        suspect = _get_suspect_or_404(case, suspect_id)
+        if suspect.status != CaseSuspectStatus.APPROVED:
+            return Response(
+                {"detail": "Interrogation is only allowed for approved suspects.", "code": "invalid_state"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        serializer = SergeantInterrogationSubmitSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        obj = _get_or_create_interrogation(suspect)
+        obj.sergeant_score = serializer.validated_data["sergeant_score"]
+        obj.sergeant_submitted_by = request.user
+        obj.sergeant_submitted_at = timezone.now()
+        obj.save(update_fields=["sergeant_score", "sergeant_submitted_by", "sergeant_submitted_at", "updated_at"])
+
+        return Response(InterrogationSerializer(obj).data, status=status.HTTP_200_OK)
+
+
+class SuspectInterrogationCaptainDecisionView(APIView):
+    """Captain submits final decision (approve/reject) + reasoning."""
+
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        request=CaptainDecisionSubmitSerializer,
+        responses={200: InterrogationSerializer},
+        description="Captain submits final decision for interrogation. Requires detective+sergeant scores to exist.",
+    )
+    def post(self, request, case_id: int, suspect_id: int):
+        if request.user.has_perm("investigations.submit_captain_interrogation_decision") or request.user.has_perm("cases.view_all_cases"):
+            case = get_object_or_404(Case, id=case_id)
+        else:
+            case = _get_case_or_404_for_user(request.user, case_id)
+
+        if not request.user.has_perm("investigations.submit_captain_interrogation_decision"):
+            return Response(
+                {"detail": "Missing permission: investigations.submit_captain_interrogation_decision", "code": "forbidden"},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        suspect = _get_suspect_or_404(case, suspect_id)
+        if suspect.status != CaseSuspectStatus.APPROVED:
+            return Response(
+                {"detail": "Interrogation decision is only allowed for approved suspects.", "code": "invalid_state"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        serializer = CaptainDecisionSubmitSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        obj = _get_or_create_interrogation(suspect)
+        if obj.detective_score is None or obj.sergeant_score is None:
+            return Response(
+                {"detail": "Detective and sergeant scores are required before captain decision.", "code": "missing_scores"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        obj.captain_final_decision = serializer.validated_data["captain_final_decision"]
+        obj.captain_reasoning = serializer.validated_data.get("captain_reasoning", "")
+        obj.captain_decided_by = request.user
+        obj.captain_decided_at = timezone.now()
+        obj.save(
+            update_fields=[
+                "captain_final_decision",
+                "captain_reasoning",
+                "captain_decided_by",
+                "captain_decided_at",
+                "updated_at",
+            ]
+        )
+
+        return Response(InterrogationSerializer(obj).data, status=status.HTTP_200_OK)
+
+
+class SuspectInterrogationChiefReviewView(APIView):
+    """Chief review for CRITICAL cases."""
+
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        request=ChiefReviewSubmitSerializer,
+        responses={200: InterrogationSerializer},
+        description="Chief approves/rejects captain decision for CRITICAL cases. Reject requires a message.",
+    )
+    def post(self, request, case_id: int, suspect_id: int):
+        if request.user.has_perm("investigations.review_critical_interrogation") or request.user.has_perm("cases.view_all_cases"):
+            case = get_object_or_404(Case, id=case_id)
+        else:
+            case = _get_case_or_404_for_user(request.user, case_id)
+
+        if not request.user.has_perm("investigations.review_critical_interrogation"):
+            return Response(
+                {"detail": "Missing permission: investigations.review_critical_interrogation", "code": "forbidden"},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        if getattr(case, "crime_level", None) != "critical":
+            return Response(
+                {"detail": "Chief review is only required/allowed for critical cases.", "code": "not_critical"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        suspect = _get_suspect_or_404(case, suspect_id)
+        if suspect.status != CaseSuspectStatus.APPROVED:
+            return Response(
+                {"detail": "Chief review is only allowed for approved suspects.", "code": "invalid_state"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        obj = _get_or_create_interrogation(suspect)
+        if obj.captain_final_decision is None:
+            return Response(
+                {"detail": "Captain decision is required before chief review.", "code": "missing_captain_decision"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        serializer = ChiefReviewSubmitSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        obj.chief_decision = serializer.validated_data["chief_decision"]
+        obj.chief_message = serializer.validated_data.get("chief_message", "")
+        obj.chief_reviewed_by = request.user
+        obj.chief_reviewed_at = timezone.now()
+        obj.save(update_fields=["chief_decision", "chief_message", "chief_reviewed_by", "chief_reviewed_at", "updated_at"])
+
+        return Response(InterrogationSerializer(obj).data, status=status.HTTP_200_OK)

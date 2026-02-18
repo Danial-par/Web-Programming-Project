@@ -10,6 +10,10 @@ from .views import (
     CaseSuspectProposeView,
     CaseSuspectReviewView,
     NotificationViewSet,
+    SuspectInterrogationCaptainDecisionView,
+    SuspectInterrogationChiefReviewView,
+    SuspectInterrogationDetectiveView,
+    SuspectInterrogationSergeantView,
 )
 
 
@@ -50,5 +54,27 @@ urlpatterns = [
         "cases/<int:case_id>/suspects/<int:suspect_id>/review/",
         CaseSuspectReviewView.as_view(),
         name="case-suspect-review",
+    ),
+
+    # Interrogation + approvals
+    path(
+        "cases/<int:case_id>/suspects/<int:suspect_id>/interrogation/detective/",
+        SuspectInterrogationDetectiveView.as_view(),
+        name="suspect-interrogation-detective",
+    ),
+    path(
+        "cases/<int:case_id>/suspects/<int:suspect_id>/interrogation/sergeant/",
+        SuspectInterrogationSergeantView.as_view(),
+        name="suspect-interrogation-sergeant",
+    ),
+    path(
+        "cases/<int:case_id>/suspects/<int:suspect_id>/interrogation/captain/",
+        SuspectInterrogationCaptainDecisionView.as_view(),
+        name="suspect-interrogation-captain",
+    ),
+    path(
+        "cases/<int:case_id>/suspects/<int:suspect_id>/interrogation/chief/",
+        SuspectInterrogationChiefReviewView.as_view(),
+        name="suspect-interrogation-chief",
     ),
 ] + router.urls
