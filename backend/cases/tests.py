@@ -7,8 +7,11 @@ from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
 
+from evidence.models import Evidence, EvidenceType
+from investigations.models import CaseSuspect, CaseSuspectStatus, Interrogation
+
 from .constants import CaseStatus, CrimeLevel, ComplaintStatus, SceneReportStatus
-from .models import Case, CaseParticipant, Complaint, SceneReport
+from .models import Case, CaseParticipant, Complaint, SceneReport, Trial
 
 
 def extract_list_payload(res):
@@ -664,3 +667,221 @@ class SceneReportExtraSafetyTests(APITestCase):
         self.client.force_authenticate(self.other)
         res = self.client.get(reverse("scene-report-detail", kwargs={"pk": sr_id}))
         self.assertIn(res.status_code, [403, 404])
+
+
+class TrialAndReportTests(APITestCase):
+    @classmethod
+    def setUpTestData(cls):
+        User = get_user_model()
+
+        cls.creator = User.objects.create_user(
+            username="creator_r",
+            email="creator_r@example.com",
+            password="pass12345",
+            phone="09120005000",
+            national_id="5000000000",
+            first_name="Creator",
+            last_name="R",
+        )
+        cls.detective = User.objects.create_user(
+            username="detective_r",
+            email="detective_r@example.com",
+            password="pass12345",
+            phone="09120005001",
+            national_id="5000000001",
+            first_name="Det",
+            last_name="R",
+        )
+        cls.sergeant = User.objects.create_user(
+            username="sergeant_r",
+            email="sergeant_r@example.com",
+            password="pass12345",
+            phone="09120005002",
+            national_id="5000000002",
+            first_name="Ser",
+            last_name="R",
+        )
+        cls.captain = User.objects.create_user(
+            username="captain_r",
+            email="captain_r@example.com",
+            password="pass12345",
+            phone="09120005003",
+            national_id="5000000003",
+            first_name="Cap",
+            last_name="R",
+        )
+        cls.chief = User.objects.create_user(
+            username="chief_r",
+            email="chief_r@example.com",
+            password="pass12345",
+            phone="09120005004",
+            national_id="5000000004",
+            first_name="Chief",
+            last_name="R",
+        )
+        cls.judge = User.objects.create_user(
+            username="judge_r",
+            email="judge_r@example.com",
+            password="pass12345",
+            phone="09120005005",
+            national_id="5000000005",
+            first_name="Judge",
+            last_name="R",
+        )
+
+        cls.case = Case.objects.create(
+            title="Critical Case",
+            description="Desc",
+            crime_level=CrimeLevel.CRITICAL,
+            status=CaseStatus.ACTIVE,
+            created_by=cls.creator,
+            formed_at=timezone.now(),
+            assigned_to=cls.detective,
+        )
+
+        cls.suspect = CaseSuspect.objects.create(
+            case=cls.case,
+            first_name="John",
+            last_name="Doe",
+            national_id="1234567890",
+            phone="09120000000",
+            notes="",
+            proposed_by=cls.detective,
+            status=CaseSuspectStatus.APPROVED,
+            reviewed_by=cls.sergeant,
+            reviewed_at=timezone.now(),
+        )
+
+        Evidence.objects.create(
+            case=cls.case,
+            type=EvidenceType.OTHER,
+            title="Basic clue",
+            description="Something",
+            created_by=cls.detective,
+        )
+
+        def grant(user, model, codename: str):
+            ct = ContentType.objects.get_for_model(model)
+            user.user_permissions.add(Permission.objects.get(content_type=ct, codename=codename))
+
+        # Interrogation permissions
+        grant(cls.detective, Interrogation, "submit_detective_interrogation")
+        grant(cls.sergeant, Interrogation, "submit_sergeant_interrogation")
+        grant(cls.captain, Interrogation, "submit_captain_interrogation_decision")
+        grant(cls.chief, Interrogation, "review_critical_interrogation")
+
+        # Judge permission
+        grant(cls.judge, Trial, "judge_verdict_trial")
+
+        cls.detective_url = reverse(
+            "suspect-interrogation-detective",
+            kwargs={"case_id": cls.case.id, "suspect_id": cls.suspect.id},
+        )
+        cls.sergeant_url = reverse(
+            "suspect-interrogation-sergeant",
+            kwargs={"case_id": cls.case.id, "suspect_id": cls.suspect.id},
+        )
+        cls.captain_url = reverse(
+            "suspect-interrogation-captain",
+            kwargs={"case_id": cls.case.id, "suspect_id": cls.suspect.id},
+        )
+        cls.chief_url = reverse(
+            "suspect-interrogation-chief",
+            kwargs={"case_id": cls.case.id, "suspect_id": cls.suspect.id},
+        )
+        cls.trial_url = reverse(
+            "case-suspect-trial",
+            kwargs={"case_id": cls.case.id, "suspect_id": cls.suspect.id},
+        )
+        cls.report_url = reverse("case-report", args=[cls.case.id])
+
+    def test_critical_case_requires_chief_approval_step_before_trial_verdict(self):
+        # detective submits
+        self.client.force_authenticate(self.detective)
+        r1 = self.client.post(self.detective_url, {"detective_score": 7}, format="json")
+        self.assertEqual(r1.status_code, 200)
+
+        # sergeant submits
+        self.client.force_authenticate(self.sergeant)
+        r2 = self.client.post(self.sergeant_url, {"sergeant_score": 6}, format="json")
+        self.assertEqual(r2.status_code, 200)
+
+        # captain approves (critical case still needs chief)
+        self.client.force_authenticate(self.captain)
+        r3 = self.client.post(
+            self.captain_url,
+            {"captain_final_decision": True, "captain_reasoning": "Proceed"},
+            format="json",
+        )
+        self.assertEqual(r3.status_code, 200)
+
+        # judge tries verdict without chief approval
+        self.client.force_authenticate(self.judge)
+        res = self.client.post(
+            self.trial_url,
+            {"verdict": "guilty", "punishment_title": "Jail", "punishment_description": "5 years"},
+            format="json",
+        )
+        self.assertEqual(res.status_code, 400)
+        self.assertEqual(res.data.get("code"), "chief_approval_required")
+
+        # chief approves
+        self.client.force_authenticate(self.chief)
+        res2 = self.client.post(self.chief_url, {"chief_decision": True, "chief_message": ""}, format="json")
+        self.assertEqual(res2.status_code, 200)
+
+        # judge can now set verdict
+        self.client.force_authenticate(self.judge)
+        res3 = self.client.post(
+            self.trial_url,
+            {"verdict": "guilty", "punishment_title": "Jail", "punishment_description": "5 years"},
+            format="json",
+        )
+        self.assertEqual(res3.status_code, 200)
+        self.assertEqual(res3.data.get("verdict"), "guilty")
+
+    def test_report_endpoint_returns_nested_structure_with_interrogation_and_trial(self):
+        # Ensure a complete chain exists so report includes trial outcome.
+        if not Trial.objects.filter(case=self.case, suspect=self.suspect).exists():
+            self.client.force_authenticate(self.detective)
+            self.client.post(self.detective_url, {"detective_score": 7}, format="json")
+
+            self.client.force_authenticate(self.sergeant)
+            self.client.post(self.sergeant_url, {"sergeant_score": 6}, format="json")
+
+            self.client.force_authenticate(self.captain)
+            self.client.post(
+                self.captain_url,
+                {"captain_final_decision": True, "captain_reasoning": "Proceed"},
+                format="json",
+            )
+
+            self.client.force_authenticate(self.chief)
+            self.client.post(self.chief_url, {"chief_decision": True, "chief_message": ""}, format="json")
+
+            self.client.force_authenticate(self.judge)
+            self.client.post(
+                self.trial_url,
+                {"verdict": "guilty", "punishment_title": "Jail", "punishment_description": "5 years"},
+                format="json",
+            )
+
+        self.client.force_authenticate(self.judge)
+        res = self.client.get(self.report_url)
+        self.assertEqual(res.status_code, 200)
+
+        for key in ["case", "complaint", "scene_report", "evidence", "suspects", "police_involved"]:
+            self.assertIn(key, res.data)
+
+        self.assertIsInstance(res.data["evidence"], list)
+        self.assertGreaterEqual(len(res.data["evidence"]), 1)
+
+        self.assertIsInstance(res.data["suspects"], list)
+        self.assertEqual(len(res.data["suspects"]), 1)
+
+        suspect = res.data["suspects"][0]
+        self.assertIn("interrogation", suspect)
+        self.assertIn("trials", suspect)
+
+        self.assertGreaterEqual(len(suspect["trials"]), 1)
+        self.assertIn(suspect["trials"][0]["verdict"], ["guilty", "innocent"])
