@@ -296,3 +296,51 @@ class Trial(models.Model):
 
     def __str__(self) -> str:
         return f"Trial(case_id={self.case_id}, suspect_id={self.suspect_id})"
+
+
+class PaymentStatus(models.TextChoices):
+    CREATED = "created", "Created"
+    PENDING = "pending", "Pending"
+    SUCCEEDED = "succeeded", "Succeeded"
+    FAILED = "failed", "Failed"
+
+
+class PaymentIntent(models.Model):
+    """Minimal payment intent model for dev/testing."""
+
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name="payment_intents",
+    )
+    case = models.ForeignKey(
+        "cases.Case",
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="payment_intents",
+    )
+    suspect = models.ForeignKey(
+        "investigations.CaseSuspect",
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="payment_intents",
+    )
+
+    amount = models.BigIntegerField()
+    status = models.CharField(
+        max_length=16,
+        choices=PaymentStatus.choices,
+        default=PaymentStatus.PENDING,
+    )
+    gateway_reference = models.CharField(max_length=64, blank=True, default="")
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self) -> str:
+        return f"PaymentIntent(id={self.id}, amount={self.amount}, status={self.status})"
