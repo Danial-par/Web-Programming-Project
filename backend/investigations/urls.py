@@ -9,11 +9,16 @@ from .views import (
     CaseBoardView,
     CaseSuspectProposeView,
     CaseSuspectReviewView,
+    MostWantedView,
     NotificationViewSet,
+    RewardLookupView,
     SuspectInterrogationCaptainDecisionView,
     SuspectInterrogationChiefReviewView,
     SuspectInterrogationDetectiveView,
     SuspectInterrogationSergeantView,
+    TipCreateView,
+    TipDetectiveReviewView,
+    TipOfficerReviewView,
 )
 
 
@@ -77,4 +82,13 @@ urlpatterns = [
         SuspectInterrogationChiefReviewView.as_view(),
         name="suspect-interrogation-chief",
     ),
+
+    # Most wanted
+    path("most-wanted/", MostWantedView.as_view(), name="most-wanted"),
+
+    # Tips and rewards
+    path("tips/", TipCreateView.as_view(), name="tip-create"),
+    path("tips/<int:tip_id>/officer-review/", TipOfficerReviewView.as_view(), name="tip-officer-review"),
+    path("tips/<int:tip_id>/detective-review/", TipDetectiveReviewView.as_view(), name="tip-detective-review"),
+    path("rewards/lookup/", RewardLookupView.as_view(), name="reward-lookup"),
 ] + router.urls

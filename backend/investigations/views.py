@@ -9,9 +9,10 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from drf_spectacular.utils import OpenApiExample, extend_schema
+from drf_spectacular.utils import OpenApiExample, OpenApiParameter, extend_schema
 
 from cases.models import Case
+from cases.constants import CaseStatus
 
 from .models import (
     BoardConnection,
@@ -21,6 +22,9 @@ from .models import (
     DetectiveBoard,
     Interrogation,
     Notification,
+    Reward,
+    Tip,
+    TipStatus,
 )
 from .permissions import user_can_access_case, user_is_assigned_detective
 from .serializers import (
@@ -38,8 +42,15 @@ from .serializers import (
     ChiefReviewSubmitSerializer,
     DetectiveInterrogationSubmitSerializer,
     InterrogationSerializer,
+    MostWantedSuspectSerializer,
     NotificationSerializer,
+    RewardLookupSerializer,
+    RewardSerializer,
     SergeantInterrogationSubmitSerializer,
+    TipCreateSerializer,
+    TipDetectiveReviewSerializer,
+    TipOfficerReviewSerializer,
+    TipSerializer,
 )
 
 
@@ -65,6 +76,24 @@ def _get_suspect_or_404(case: Case, suspect_id: int) -> CaseSuspect:
 def _get_or_create_interrogation(suspect: CaseSuspect) -> Interrogation:
     obj, _ = Interrogation.objects.get_or_create(suspect=suspect)
     return obj
+
+
+def _compute_most_wanted_metrics(suspect: CaseSuspect):
+    """Compute days_wanted, degree, ranking, reward for a suspect."""
+    from cases.constants import CRIME_LEVEL_DEGREE
+
+    case = suspect.case
+    degree = CRIME_LEVEL_DEGREE.get(case.crime_level, 0)
+
+    # Days since suspect was proposed and case is not closed
+    if case.status != CaseStatus.CLOSED:
+        days = (timezone.now().date() - suspect.proposed_at.date()).days or 1
+    else:
+        days = 0
+
+    ranking = days * degree
+    reward = ranking * 20_000_000
+    return days, degree, ranking, reward
 
 
 class CaseBoardView(APIView):
@@ -682,3 +711,269 @@ class SuspectInterrogationChiefReviewView(APIView):
         obj.save(update_fields=["chief_decision", "chief_message", "chief_reviewed_by", "chief_reviewed_at", "updated_at"])
 
         return Response(InterrogationSerializer(obj).data, status=status.HTTP_200_OK)
+
+
+# -----------------------------------------------------------------------------
+# Most wanted + tips / rewards
+# -----------------------------------------------------------------------------
+
+
+class MostWantedView(APIView):
+    """List most wanted suspects with ranking and reward."""
+
+    permission_classes = []  # public
+
+    @extend_schema(
+        parameters=[
+            OpenApiParameter(
+                name="limit",
+                description="Maximum number of suspects to return (default 10).",
+                required=False,
+                type=int,
+            )
+        ],
+        responses={200: MostWantedSuspectSerializer(many=True)},
+        description=(
+            "Return the most wanted suspects based on:\n"
+            "ranking = max(days_wanted_in_open_cases) * max(crime_degree_ever)\n"
+            "reward_amount = ranking * 20_000_000 (Rial)."
+        ),
+    )
+    def get(self, request):
+        limit = request.query_params.get("limit")
+        try:
+            limit = int(limit) if limit is not None else 10
+        except ValueError:
+            limit = 10
+
+        suspects = (
+            CaseSuspect.objects.select_related("case")
+            .filter(
+                status=CaseSuspectStatus.APPROVED,
+            )
+        )
+
+        items = []
+        for s in suspects:
+            days, degree, ranking, reward = _compute_most_wanted_metrics(s)
+            if ranking <= 0:
+                continue
+            items.append(
+                {
+                    "suspect_id": s.id,
+                    "first_name": s.first_name,
+                    "last_name": s.last_name,
+                    "national_id": s.national_id,
+                    "phone": s.phone,
+                    "photo": s.photo,
+                    "max_days_wanted": days,
+                    "max_crime_degree": degree,
+                    "ranking": ranking,
+                    "reward_amount": reward,
+                }
+            )
+
+        items.sort(key=lambda x: x["ranking"], reverse=True)
+        items = items[: max(limit, 1)]
+
+        serializer = MostWantedSuspectSerializer(items, many=True, context={"request": request})
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+class TipCreateView(APIView):
+    """Submit a new tip (authenticated normal user)."""
+
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        request=TipCreateSerializer,
+        responses={201: TipSerializer},
+        description="Create a new tip about a case and/or suspect.",
+    )
+    def post(self, request):
+        serializer = TipCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        tip = Tip.objects.create(user=request.user, **serializer.validated_data)
+        return Response(TipSerializer(tip, context={"request": request}).data, status=status.HTTP_201_CREATED)
+
+
+class TipOfficerReviewView(APIView):
+    """Officer performs initial review of a tip."""
+
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        request=TipOfficerReviewSerializer,
+        responses={200: TipSerializer},
+        description="Officer review: reject tip or forward to responsible detective.",
+    )
+    def post(self, request, tip_id: int):
+        if not request.user.has_perm("investigations.officer_review_tip"):
+            return Response(
+                {"detail": "Missing permission: investigations.officer_review_tip", "code": "forbidden"},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        tip = get_object_or_404(Tip, id=tip_id)
+        serializer = TipOfficerReviewSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        decision = serializer.validated_data["decision"]
+        message = serializer.validated_data.get("message", "")
+
+        if tip.status != TipStatus.SUBMITTED:
+            return Response(
+                {"detail": "Tip already reviewed by officer.", "code": "invalid_state"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        tip.officer_message = message
+        tip.officer_reviewed_by = request.user
+        tip.officer_reviewed_at = timezone.now()
+
+        if decision == "reject":
+            tip.status = TipStatus.OFFICER_REJECTED
+        else:
+            tip.status = TipStatus.FORWARDED_TO_DETECTIVE
+
+        tip.save(
+            update_fields=[
+                "status",
+                "officer_message",
+                "officer_reviewed_by",
+                "officer_reviewed_at",
+                "updated_at",
+            ]
+        )
+
+        return Response(TipSerializer(tip, context={"request": request}).data, status=status.HTTP_200_OK)
+
+
+class TipDetectiveReviewView(APIView):
+    """Detective approves or rejects a forwarded tip."""
+
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        request=TipDetectiveReviewSerializer,
+        responses={200: TipSerializer},
+        description="Detective review: approve (generate reward) or reject tip.",
+    )
+    def post(self, request, tip_id: int):
+        if not request.user.has_perm("investigations.detective_review_tip"):
+            return Response(
+                {"detail": "Missing permission: investigations.detective_review_tip", "code": "forbidden"},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        tip = get_object_or_404(Tip.objects.select_related("case", "suspect", "user"), id=tip_id)
+
+        if tip.status != TipStatus.FORWARDED_TO_DETECTIVE:
+            return Response(
+                {"detail": "Tip is not in a state for detective review.", "code": "invalid_state"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # If case is set, ensure requesting user is assigned detective for that case (when applicable)
+        if tip.case and tip.case.assigned_to_id and tip.case.assigned_to_id != request.user.id and not request.user.has_perm("cases.view_all_cases"):
+            return Response(
+                {"detail": "Only assigned detective can review this tip.", "code": "forbidden"},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        serializer = TipDetectiveReviewSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        decision = serializer.validated_data["decision"]
+        message = serializer.validated_data.get("message", "")
+
+        tip.detective_message = message
+        tip.detective_reviewed_by = request.user
+        tip.detective_reviewed_at = timezone.now()
+
+        if decision == "reject":
+            tip.status = TipStatus.DETECTIVE_REJECTED
+            tip.save(
+                update_fields=[
+                    "status",
+                    "detective_message",
+                    "detective_reviewed_by",
+                    "detective_reviewed_at",
+                    "updated_at",
+                ]
+            )
+            return Response(TipSerializer(tip, context={"request": request}).data, status=status.HTTP_200_OK)
+
+        # Approve => create reward if not exists
+        tip.status = TipStatus.APPROVED
+        tip.save(
+            update_fields=[
+                "status",
+                "detective_message",
+                "detective_reviewed_by",
+                "detective_reviewed_at",
+                "updated_at",
+            ]
+        )
+
+        if not hasattr(tip, "reward"):
+            # Derive reward amount from suspect / case severity when possible
+            amount = 20_000_000
+            if tip.suspect:
+                _, _, ranking, reward_amount = _compute_most_wanted_metrics(tip.suspect)
+                if reward_amount > 0:
+                    amount = reward_amount
+            elif tip.case:
+                from cases.constants import CRIME_LEVEL_DEGREE
+
+                degree = CRIME_LEVEL_DEGREE.get(tip.case.crime_level, 1)
+                amount = degree * 20_000_000
+
+            import uuid
+
+            Reward.objects.create(
+                tip=tip,
+                reward_code=uuid.uuid4().hex[:16],
+                reward_amount=amount,
+            )
+
+        return Response(TipSerializer(tip, context={"request": request}).data, status=status.HTTP_200_OK)
+
+
+class RewardLookupView(APIView):
+    """Police-only reward lookup endpoint."""
+
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        request=RewardLookupSerializer,
+        responses={200: RewardSerializer},
+        description="Lookup reward by national_id + reward_code (police-only).",
+    )
+    def post(self, request):
+        if not request.user.has_perm("investigations.reward_lookup"):
+            return Response(
+                {"detail": "Missing permission: investigations.reward_lookup", "code": "forbidden"},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        serializer = RewardLookupSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        national_id = serializer.validated_data["national_id"]
+        reward_code = serializer.validated_data["reward_code"]
+
+        reward = get_object_or_404(
+            Reward.objects.select_related("tip", "tip__user"),
+            reward_code=reward_code,
+            tip__user__national_id=national_id,
+            tip__status=TipStatus.APPROVED,
+        )
+
+        payload = RewardSerializer(reward).data
+        payload["tip_user"] = {
+            "id": reward.tip.user_id,
+            "national_id": reward.tip.user.national_id,
+            "username": reward.tip.user.username,
+        }
+        return Response(payload, status=status.HTTP_200_OK)
