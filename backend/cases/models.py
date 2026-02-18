@@ -235,3 +235,64 @@ class SceneWitness(models.Model):
 
     class Meta:
         unique_together = ("scene_report", "phone", "national_id")
+
+
+class TrialVerdict(models.TextChoices):
+    GUILTY = "guilty", "Guilty"
+    INNOCENT = "innocent", "Innocent"
+
+
+class Trial(models.Model):
+    """Judiciary trial record for a (case, suspect)."""
+
+    case = models.ForeignKey(
+        "cases.Case",
+        on_delete=models.CASCADE,
+        related_name="trials",
+    )
+    suspect = models.ForeignKey(
+        "investigations.CaseSuspect",
+        on_delete=models.CASCADE,
+        related_name="trials",
+    )
+
+    verdict = models.CharField(
+        max_length=16,
+        choices=TrialVerdict.choices,
+        null=True,
+        blank=True,
+    )
+    punishment_title = models.CharField(max_length=255, blank=True, default="")
+    punishment_description = models.TextField(blank=True, default="")
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    created_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name="trials_created",
+    )
+
+    verdict_at = models.DateTimeField(null=True, blank=True)
+    verdict_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="trial_verdicts_given",
+    )
+
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        constraints = [
+            models.UniqueConstraint(fields=["case", "suspect"], name="uniq_trial_case_suspect")
+        ]
+        permissions = [
+            ("judge_verdict_trial", "Can create/update trial verdict (judge)"),
+            ("view_case_report", "Can view case report"),
+        ]
+
+    def __str__(self) -> str:
+        return f"Trial(case_id={self.case_id}, suspect_id={self.suspect_id})"
