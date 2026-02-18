@@ -11,7 +11,7 @@ from cases.models import Case, CaseParticipant
 
 from evidence.models import Evidence, EvidenceType
 
-from .models import BoardItem, CaseSuspect, CaseSuspectStatus, Notification
+from .models import BoardItem, CaseSuspect, CaseSuspectStatus, Interrogation, Notification
 
 
 User = get_user_model()
@@ -297,3 +297,64 @@ class CaseSuspectFlowTests(InvestigationsBaseAPITest):
         )
         res2 = self.client.post(review_url, {"decision": "approve"}, format="json")
         self.assertEqual(res2.status_code, status.HTTP_403_FORBIDDEN)
+
+
+class InterrogationScoreValidationTests(InvestigationsBaseAPITest):
+    @classmethod
+    def setUpTestData(cls):
+        cls.detective = User.objects.create_user(
+            username="det_int",
+            email="det_int@example.com",
+            password="pass12345",
+            phone="09120004000",
+            national_id="4000000000",
+            first_name="Det",
+            last_name="Int",
+        )
+        cls.creator = User.objects.create_user(
+            username="creator_int",
+            email="creator_int@example.com",
+            password="pass12345",
+            phone="09120004001",
+            national_id="4000000001",
+            first_name="Creator",
+            last_name="Int",
+        )
+
+        cls.case = Case.objects.create(
+            title="Interrogation Case",
+            description="Desc",
+            crime_level=CrimeLevel.LEVEL_1,
+            status=CaseStatus.ACTIVE,
+            created_by=cls.creator,
+            formed_at=timezone.now(),
+            assigned_to=cls.detective,
+        )
+
+        cls.suspect = CaseSuspect.objects.create(
+            case=cls.case,
+            first_name="John",
+            last_name="Doe",
+            national_id="1234567890",
+            phone="09120000000",
+            notes="",
+            status=CaseSuspectStatus.APPROVED,
+            proposed_by=cls.detective,
+        )
+
+        InvestigationsBaseAPITest.grant_perm(cls.detective, Interrogation, "submit_detective_interrogation")
+
+        cls.url = reverse(
+            "suspect-interrogation-detective",
+            kwargs={"case_id": cls.case.id, "suspect_id": cls.suspect.id},
+        )
+
+    def authenticate(self, user):
+        self.client.force_authenticate(user=user)
+
+    def test_detective_score_out_of_range_returns_validation_error(self):
+        self.authenticate(self.detective)
+        res = self.client.post(self.url, {"detective_score": 0}, format="json")
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(res.data.get("code"), "validation_error")
+        self.assertIn("detective_score", res.data.get("fields", {}))
