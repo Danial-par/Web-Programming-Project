@@ -1,6 +1,6 @@
 from django.db import models, transaction
 from django.db.models import Q
-from django.shortcuts import get_object_or_404
+from django.shortcuts import get_object_or_404, render
 from django.utils import timezone
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
@@ -13,7 +13,7 @@ from drf_spectacular.utils import extend_schema
 
 from investigations.models import CaseSuspect, Interrogation
 
-from .models import Case, CaseParticipant, Complaint, ComplaintComplainant, SceneReport, Trial
+from .models import Case, CaseParticipant, Complaint, ComplaintComplainant, PaymentIntent, PaymentStatus, SceneReport, Trial
 from .constants import CaseStatus, ComplaintStatus, ComplaintComplainantStatus, SceneReportStatus
 from .serializers import (
     CaseListSerializer,
@@ -30,6 +30,8 @@ from .serializers import (
     SceneReportDetailSerializer,
     SceneReportApproveSerializer,
     CaseReportSerializer,
+    PaymentIntentSerializer,
+    PaymentStartSerializer,
     TrialSerializer,
     TrialVerdictWriteSerializer,
 )
@@ -184,6 +186,70 @@ class TrialVerdictView(APIView):
         )
 
         return Response(TrialSerializer(trial).data, status=status.HTTP_200_OK)
+
+
+class PaymentStartView(APIView):
+    """Start a mock payment and return a simulation URL."""
+
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        request=PaymentStartSerializer,
+        responses={200: PaymentIntentSerializer},
+        description=(
+            "Create a PaymentIntent and return a URL to simulate payment in development.\n\n"
+            "The returned `payment_url` can be opened in a browser to mark the payment as succeeded or failed."
+        ),
+    )
+    def post(self, request):
+        serializer = PaymentStartSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        case = None
+        suspect = None
+        case_id = serializer.validated_data.get("case_id")
+        suspect_id = serializer.validated_data.get("suspect_id")
+
+        if case_id:
+            case = get_object_or_404(Case, id=case_id)
+        if suspect_id:
+            suspect = get_object_or_404(CaseSuspect, id=suspect_id)
+
+        intent = PaymentIntent.objects.create(
+            user=request.user,
+            case=case,
+            suspect=suspect,
+            amount=serializer.validated_data["amount"],
+            status=PaymentStatus.PENDING,
+        )
+
+        payment_url = request.build_absolute_uri(f"/payments/simulate/{intent.id}/")
+        data = PaymentIntentSerializer(intent, context={"request": request}).data
+        data["payment_url"] = payment_url
+        return Response(data, status=status.HTTP_200_OK)
+
+
+def payment_simulate_view(request, payment_id: int):
+    """Minimal HTML view to simulate payment success/failure in dev.
+
+    Usage:
+    - Open the URL from `payment_url` (defaults to success).
+    - Optional query param `?success=0` to mark as failed.
+    """
+
+    intent = get_object_or_404(PaymentIntent, id=payment_id)
+
+    success_param = request.GET.get("success", "1")
+    success = success_param not in {"0", "false", "False"}
+
+    intent.status = PaymentStatus.SUCCEEDED if success else PaymentStatus.FAILED
+    intent.save(update_fields=["status", "updated_at"])
+
+    context = {
+        "payment": intent,
+        "success": success,
+    }
+    return render(request, "payments/result.html", context)
 
 
 class ComplaintViewSet(viewsets.ModelViewSet):

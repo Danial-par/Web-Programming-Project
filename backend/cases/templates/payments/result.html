@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Payment Result</title>
+    <style>
+        body {
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            background: #0f172a;
+            color: #e5e7eb;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+        }
+        .card {
+            background: #020617;
+            border-radius: 16px;
+            padding: 32px 40px;
+            box-shadow: 0 25px 50px -12px rgba(15,23,42,0.7);
+            max-width: 520px;
+            width: 100%;
+        }
+        .status {
+            font-size: 1.5rem;
+            margin-bottom: 8px;
+        }
+        .status.success {
+            color: #4ade80;
+        }
+        .status.fail {
+            color: #f97373;
+        }
+        .meta {
+            font-size: 0.95rem;
+            color: #9ca3af;
+            margin-top: 12px;
+        }
+        .badge {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 999px;
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            margin-bottom: 4px;
+            background: #1f2937;
+            color: #e5e7eb;
+        }
+        .amount {
+            font-size: 1.25rem;
+            margin-top: 16px;
+        }
+    </style>
+</head>
+<body>
+<div class="card">
+    <div class="badge">Payment Simulation</div>
+    {% if success %}
+        <div class="status success">Payment succeeded</div>
+        <p>Your payment has been marked as <strong>succeeded</strong> in the system.</p>
+    {% else %}
+        <div class="status fail">Payment failed</div>
+        <p>The payment has been marked as <strong>failed</strong>. You can start a new payment from the application.</p>
+    {% endif %}
+
+    <div class="amount">
+        Amount: {{ payment.amount }} Rial
+    </div>
+
+    <div class="meta">
+        Payment ID: {{ payment.id }}<br>
+        Status: {{ payment.status }}
+    </div>
+</div>
+</body>
+</html>
+

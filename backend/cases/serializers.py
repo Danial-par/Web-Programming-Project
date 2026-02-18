@@ -4,7 +4,16 @@ from rest_framework import serializers
 
 from investigations.models import CaseSuspect, Interrogation
 
-from .models import Case, Complaint, ComplaintComplainant, SceneReport, SceneWitness, Trial, TrialVerdict
+from .models import (
+    Case,
+    Complaint,
+    ComplaintComplainant,
+    PaymentIntent,
+    SceneReport,
+    SceneWitness,
+    Trial,
+    TrialVerdict,
+)
 from .constants import CaseStatus, CrimeLevel, ComplaintStatus, ComplaintComplainantStatus, SceneReportStatus
 
 User = get_user_model()
@@ -440,3 +449,35 @@ class CaseReportSerializer(serializers.Serializer):
             "suspects": suspects_data,
             "police_involved": police_involved,
         }
+
+
+class PaymentIntentSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PaymentIntent
+        fields = [
+            "id",
+            "user",
+            "case",
+            "suspect",
+            "amount",
+            "status",
+            "gateway_reference",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = fields
+
+
+class PaymentStartSerializer(serializers.Serializer):
+    amount = serializers.IntegerField(min_value=1)
+    case_id = serializers.IntegerField(required=False)
+    suspect_id = serializers.IntegerField(required=False)
+
+    def validate(self, attrs):
+        case_id = attrs.get("case_id")
+        suspect_id = attrs.get("suspect_id")
+        if not case_id and not suspect_id:
+            raise serializers.ValidationError(
+                {"non_field_errors": "Provide at least case_id or suspect_id for payment context."}
+            )
+        return attrs
