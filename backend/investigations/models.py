@@ -5,6 +5,7 @@ from django.db.models import Q
 
 
 from django.conf import settings
+from django.core.validators import MaxValueValidator, MinValueValidator
 
 
 class DetectiveBoard(models.Model):
@@ -206,3 +207,79 @@ class CaseSuspect(models.Model):
 
     def __str__(self) -> str:
         return f"CaseSuspect(case_id={self.case_id}, name={self.first_name} {self.last_name})"
+
+
+class Interrogation(models.Model):
+    """Interrogation + approval chain for a CaseSuspect."""
+
+    suspect = models.OneToOneField(
+        CaseSuspect,
+        on_delete=models.CASCADE,
+        related_name="interrogation",
+    )
+
+    detective_score = models.PositiveSmallIntegerField(
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(1), MaxValueValidator(10)],
+    )
+    detective_submitted_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="interrogations_detective_submitted",
+    )
+    detective_submitted_at = models.DateTimeField(null=True, blank=True)
+
+    sergeant_score = models.PositiveSmallIntegerField(
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(1), MaxValueValidator(10)],
+    )
+    sergeant_submitted_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="interrogations_sergeant_submitted",
+    )
+    sergeant_submitted_at = models.DateTimeField(null=True, blank=True)
+
+    captain_final_decision = models.BooleanField(null=True, blank=True)
+    captain_reasoning = models.TextField(blank=True, default="")
+    captain_decided_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="interrogations_captain_decided",
+    )
+    captain_decided_at = models.DateTimeField(null=True, blank=True)
+
+    # Critical cases require chief review step (approve/reject + message)
+    chief_decision = models.BooleanField(null=True, blank=True)
+    chief_message = models.TextField(blank=True, default="")
+    chief_reviewed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="interrogations_chief_reviewed",
+    )
+    chief_reviewed_at = models.DateTimeField(null=True, blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-updated_at"]
+        permissions = [
+            ("submit_detective_interrogation", "Can submit detective interrogation score"),
+            ("submit_sergeant_interrogation", "Can submit sergeant interrogation score"),
+            ("submit_captain_interrogation_decision", "Can submit captain interrogation decision"),
+            ("review_critical_interrogation", "Can review critical case interrogation (chief)"),
+        ]
+
+    def __str__(self) -> str:
+        return f"Interrogation(suspect_id={self.suspect_id})"
