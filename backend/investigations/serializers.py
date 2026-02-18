@@ -12,6 +12,7 @@ from .models import (
     DetectiveBoard,
     CaseSuspect,
     CaseSuspectStatus,
+    Interrogation,
     Notification,
 )
 
@@ -277,4 +278,61 @@ class CaseSuspectReviewSerializer(serializers.Serializer):
             raise serializers.ValidationError({"message": "Message is required when rejecting."})
 
         attrs["message"] = message
+        return attrs
+
+
+class InterrogationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Interrogation
+        fields = [
+            "id",
+            "suspect",
+            "detective_score",
+            "detective_submitted_by",
+            "detective_submitted_at",
+            "sergeant_score",
+            "sergeant_submitted_by",
+            "sergeant_submitted_at",
+            "captain_final_decision",
+            "captain_reasoning",
+            "captain_decided_by",
+            "captain_decided_at",
+            "chief_decision",
+            "chief_message",
+            "chief_reviewed_by",
+            "chief_reviewed_at",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = fields
+
+
+class DetectiveInterrogationSubmitSerializer(serializers.Serializer):
+    detective_score = serializers.IntegerField(min_value=1, max_value=10)
+
+
+class SergeantInterrogationSubmitSerializer(serializers.Serializer):
+    sergeant_score = serializers.IntegerField(min_value=1, max_value=10)
+
+
+class CaptainDecisionSubmitSerializer(serializers.Serializer):
+    captain_final_decision = serializers.BooleanField()
+    captain_reasoning = serializers.CharField(required=False, allow_blank=True)
+
+    def validate(self, attrs):
+        reasoning = (attrs.get("captain_reasoning") or "").strip()
+        attrs["captain_reasoning"] = reasoning
+        return attrs
+
+
+class ChiefReviewSubmitSerializer(serializers.Serializer):
+    chief_decision = serializers.BooleanField()
+    chief_message = serializers.CharField(required=False, allow_blank=True)
+
+    def validate(self, attrs):
+        decision = attrs.get("chief_decision")
+        msg = (attrs.get("chief_message") or "").strip()
+        if decision is False and not msg:
+            raise serializers.ValidationError({"chief_message": "Message is required when rejecting."})
+        attrs["chief_message"] = msg
         return attrs
