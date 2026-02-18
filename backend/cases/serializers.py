@@ -2,7 +2,9 @@ from django.contrib.auth import get_user_model
 from django.utils import timezone
 from rest_framework import serializers
 
-from .models import Case, Complaint, ComplaintComplainant, SceneReport, SceneWitness
+from investigations.models import CaseSuspect, Interrogation
+
+from .models import Case, Complaint, ComplaintComplainant, SceneReport, SceneWitness, Trial, TrialVerdict
 from .constants import CaseStatus, CrimeLevel, ComplaintStatus, ComplaintComplainantStatus, SceneReportStatus
 
 User = get_user_model()
@@ -252,3 +254,189 @@ class SceneReportApproveSerializer(serializers.Serializer):
     Kept for swagger consistency.
     """
     pass
+
+
+class TrialSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Trial
+        fields = [
+            "id",
+            "case",
+            "suspect",
+            "verdict",
+            "punishment_title",
+            "punishment_description",
+            "created_at",
+            "created_by",
+            "verdict_at",
+            "verdict_by",
+            "updated_at",
+        ]
+        read_only_fields = fields
+
+
+class TrialVerdictWriteSerializer(serializers.Serializer):
+    verdict = serializers.ChoiceField(choices=TrialVerdict.choices)
+    punishment_title = serializers.CharField(required=False, allow_blank=True)
+    punishment_description = serializers.CharField(required=False, allow_blank=True)
+
+    def validate(self, attrs):
+        verdict = attrs.get("verdict")
+        title = (attrs.get("punishment_title") or "").strip()
+        desc = (attrs.get("punishment_description") or "").strip()
+
+        if verdict == TrialVerdict.GUILTY:
+            if not title:
+                raise serializers.ValidationError({"punishment_title": "Required when verdict is guilty."})
+            if not desc:
+                raise serializers.ValidationError({"punishment_description": "Required when verdict is guilty."})
+        else:
+            # innocent => no punishment
+            title = ""
+            desc = ""
+
+        attrs["punishment_title"] = title
+        attrs["punishment_description"] = desc
+        return attrs
+
+
+class BasicUserSerializer(serializers.ModelSerializer):
+    roles = serializers.SerializerMethodField()
+
+    class Meta:
+        model = User
+        fields = ["id", "username", "first_name", "last_name", "roles"]
+        read_only_fields = fields
+
+    def get_roles(self, obj):
+        return list(obj.groups.values_list("name", flat=True))
+
+
+class InterrogationReportSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Interrogation
+        fields = [
+            "id",
+            "detective_score",
+            "detective_submitted_by",
+            "detective_submitted_at",
+            "sergeant_score",
+            "sergeant_submitted_by",
+            "sergeant_submitted_at",
+            "captain_final_decision",
+            "captain_reasoning",
+            "captain_decided_by",
+            "captain_decided_at",
+            "chief_decision",
+            "chief_message",
+            "chief_reviewed_by",
+            "chief_reviewed_at",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = fields
+
+
+class TrialReportSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Trial
+        fields = [
+            "id",
+            "verdict",
+            "punishment_title",
+            "punishment_description",
+            "created_at",
+            "created_by",
+            "verdict_at",
+            "verdict_by",
+            "updated_at",
+        ]
+        read_only_fields = fields
+
+
+class CaseSuspectReportSerializer(serializers.ModelSerializer):
+    interrogation = InterrogationReportSerializer(read_only=True)
+    trials = TrialReportSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = CaseSuspect
+        fields = [
+            "id",
+            "case",
+            "first_name",
+            "last_name",
+            "national_id",
+            "phone",
+            "notes",
+            "proposed_by",
+            "proposed_at",
+            "status",
+            "sergeant_message",
+            "reviewed_by",
+            "reviewed_at",
+            "interrogation",
+            "trials",
+        ]
+        read_only_fields = fields
+
+
+class CaseReportSerializer(serializers.Serializer):
+    """Nested payload for the general case report page."""
+
+    def to_representation(self, instance: Case):
+        # Avoid circular imports at module import time
+        from evidence.serializers import EvidenceSerializer
+
+        case_data = CaseDetailSerializer(instance, context=self.context).data
+
+        complaint_obj = getattr(instance, "complaint", None)
+        complaint_data = (
+            ComplaintDetailSerializer(complaint_obj, context=self.context).data if complaint_obj else None
+        )
+
+        scene_report_obj = getattr(instance, "scene_report", None)
+        scene_report_data = (
+            SceneReportDetailSerializer(scene_report_obj, context=self.context).data if scene_report_obj else None
+        )
+
+        evidence_qs = instance.evidence_items.all().prefetch_related("attachments")
+        evidence_data = EvidenceSerializer(evidence_qs, many=True, context=self.context).data
+
+        suspects_qs = (
+            instance.suspects.all()
+            .select_related("proposed_by", "reviewed_by")
+            .prefetch_related("trials")
+        )
+        suspects_data = CaseSuspectReportSerializer(suspects_qs, many=True, context=self.context).data
+
+        police_involved = {
+            "created_by": BasicUserSerializer(instance.created_by).data if instance.created_by else None,
+            "assigned_to": BasicUserSerializer(instance.assigned_to).data if instance.assigned_to else None,
+            "complaint_review": None,
+            "scene_report": None,
+        }
+
+        if complaint_obj:
+            police_involved["complaint_review"] = {
+                "cadet_reviewed_by": BasicUserSerializer(complaint_obj.cadet_reviewed_by).data if complaint_obj.cadet_reviewed_by else None,
+                "officer_reviewed_by": BasicUserSerializer(complaint_obj.officer_reviewed_by).data if complaint_obj.officer_reviewed_by else None,
+                "cadet_message": complaint_obj.cadet_message,
+                "officer_message": complaint_obj.officer_message,
+                "current_status": complaint_obj.current_status,
+            }
+
+        if scene_report_obj:
+            police_involved["scene_report"] = {
+                "created_by": BasicUserSerializer(scene_report_obj.created_by).data if scene_report_obj.created_by else None,
+                "approved_by": BasicUserSerializer(scene_report_obj.approved_by).data if scene_report_obj.approved_by else None,
+                "status": scene_report_obj.status,
+            }
+
+        return {
+            "case": case_data,
+            "complaint": complaint_data,
+            "scene_report": scene_report_data,
+            "evidence": evidence_data,
+            "suspects": suspects_data,
+            "police_involved": police_involved,
+        }

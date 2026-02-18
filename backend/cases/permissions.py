@@ -77,3 +77,42 @@ class CanViewSceneReport(BasePermission):
             return True
 
         return obj.created_by_id == request.user.id
+
+
+class CanJudgeTrial(BasePermission):
+    def has_permission(self, request, view):
+        return request.user.is_authenticated and request.user.has_perm("cases.judge_verdict_trial")
+
+
+class CanViewCaseReport(BasePermission):
+    """Access rule for /cases/{id}/report/.
+
+    - judge/captain/chief can view (permission-based)
+    - others can view only if involved in case AND explicitly permitted (cases.view_case_report)
+    """
+
+    def has_object_permission(self, request, view, obj):
+        user = request.user
+        if not user.is_authenticated:
+            return False
+
+        if user.has_perm("cases.view_all_cases"):
+            return True
+
+        # Privileged roles (permission-based)
+        if (
+            user.has_perm("cases.judge_verdict_trial")
+            or user.has_perm("investigations.submit_captain_interrogation_decision")
+            or user.has_perm("investigations.review_critical_interrogation")
+        ):
+            return True
+
+        # Otherwise: must be involved AND have explicit permission to view reports
+        if not user.has_perm("cases.view_case_report"):
+            return False
+
+        return (
+            obj.created_by_id == user.id
+            or obj.assigned_to_id == user.id
+            or obj.participants.filter(user=user).exists()
+        )

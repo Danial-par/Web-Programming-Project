@@ -1,15 +1,19 @@
 from django.db import models, transaction
 from django.db.models import Q
+from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
+from rest_framework.views import APIView
 from rest_framework.viewsets import ModelViewSet
 
 from drf_spectacular.utils import extend_schema
 
-from .models import Case, CaseParticipant, Complaint, ComplaintComplainant, SceneReport
+from investigations.models import CaseSuspect, Interrogation
+
+from .models import Case, CaseParticipant, Complaint, ComplaintComplainant, SceneReport, Trial
 from .constants import CaseStatus, ComplaintStatus, ComplaintComplainantStatus, SceneReportStatus
 from .serializers import (
     CaseListSerializer,
@@ -25,6 +29,9 @@ from .serializers import (
     SceneReportListSerializer,
     SceneReportDetailSerializer,
     SceneReportApproveSerializer,
+    CaseReportSerializer,
+    TrialSerializer,
+    TrialVerdictWriteSerializer,
 )
 from .permissions import (
     CanViewCase,
@@ -35,6 +42,8 @@ from .permissions import (
     CanCreateSceneReport,
     CanApproveSceneReport,
     CanViewSceneReport,
+    CanJudgeTrial,
+    CanViewCaseReport,
 )
 
 
@@ -68,6 +77,113 @@ class CaseViewSet(ModelViewSet):
 
     def perform_create(self, serializer):
         serializer.save(created_by=self.request.user)
+
+    @extend_schema(
+        responses={200: CaseReportSerializer},
+        description="Return nested payload for the general case report page.",
+    )
+    @action(
+        detail=True,
+        methods=["get"],
+        url_path="report",
+        permission_classes=[IsAuthenticated, CanViewCaseReport],
+    )
+    def report(self, request, pk=None):
+        # For privileged roles, do not rely on the default queryset scoping (avoid 404).
+        if (
+            request.user.has_perm("cases.view_all_cases")
+            or request.user.has_perm("cases.judge_verdict_trial")
+            or request.user.has_perm("investigations.submit_captain_interrogation_decision")
+            or request.user.has_perm("investigations.review_critical_interrogation")
+        ):
+            case = get_object_or_404(Case.objects.all(), pk=pk)
+        else:
+            case = get_object_or_404(self.get_queryset(), pk=pk)
+
+        # Object-level permission check (for the action's permission_classes)
+        for perm in self.get_permissions():
+            if hasattr(perm, "has_object_permission") and not perm.has_object_permission(request, self, case):
+                self.permission_denied(request)
+
+        # Prefetch heavy relations used by report serializer
+        case = (
+            Case.objects.filter(pk=case.pk)
+            .select_related("created_by", "assigned_to")
+            .prefetch_related(
+                "participants__user",
+                "evidence_items__attachments",
+                "suspects__trials",
+            )
+            .first()
+        )
+
+        return Response(CaseReportSerializer(case, context={"request": request}).data, status=status.HTTP_200_OK)
+
+
+class TrialVerdictView(APIView):
+    """Judge creates/updates verdict for a suspect trial in a case."""
+
+    permission_classes = [IsAuthenticated, CanJudgeTrial]
+
+    @extend_schema(
+        request=TrialVerdictWriteSerializer,
+        responses={200: TrialSerializer},
+        description=(
+            "Create/update the judge verdict for a (case, suspect) trial.\n\n"
+            "Guards:\n"
+            "- Captain decision must be present and True.\n"
+            "- For CRITICAL cases, chief_decision must be True.\n"
+        ),
+    )
+    def post(self, request, case_id: int, suspect_id: int):
+        case = get_object_or_404(Case, id=case_id)
+        suspect = get_object_or_404(CaseSuspect, id=suspect_id, case=case)
+
+        interrogation = getattr(suspect, "interrogation", None)
+        if interrogation is None:
+            return Response(
+                {"detail": "Interrogation record is required before trial.", "code": "missing_interrogation"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if interrogation.captain_final_decision is not True:
+            return Response(
+                {"detail": "Captain approval is required before trial.", "code": "captain_approval_required"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if case.crime_level == "critical" and interrogation.chief_decision is not True:
+            return Response(
+                {"detail": "Chief approval is required for critical cases before trial.", "code": "chief_approval_required"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        serializer = TrialVerdictWriteSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        trial, created = Trial.objects.get_or_create(
+            case=case,
+            suspect=suspect,
+            defaults={"created_by": request.user},
+        )
+
+        trial.verdict = serializer.validated_data["verdict"]
+        trial.punishment_title = serializer.validated_data.get("punishment_title", "")
+        trial.punishment_description = serializer.validated_data.get("punishment_description", "")
+        trial.verdict_by = request.user
+        trial.verdict_at = timezone.now()
+        trial.save(
+            update_fields=[
+                "verdict",
+                "punishment_title",
+                "punishment_description",
+                "verdict_by",
+                "verdict_at",
+                "updated_at",
+            ]
+        )
+
+        return Response(TrialSerializer(trial).data, status=status.HTTP_200_OK)
 
 
 class ComplaintViewSet(viewsets.ModelViewSet):
