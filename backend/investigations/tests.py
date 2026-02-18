@@ -11,7 +11,7 @@ from cases.models import Case, CaseParticipant
 
 from evidence.models import Evidence, EvidenceType
 
-from .models import BoardItem, CaseSuspect, CaseSuspectStatus, Interrogation, Notification
+from .models import BoardItem, CaseSuspect, CaseSuspectStatus, Interrogation, Notification, Reward, Tip
 
 
 User = get_user_model()
@@ -358,3 +358,102 @@ class InterrogationScoreValidationTests(InvestigationsBaseAPITest):
         self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(res.data.get("code"), "validation_error")
         self.assertIn("detective_score", res.data.get("fields", {}))
+
+
+class MostWantedAndRewardsTests(InvestigationsBaseAPITest):
+    @classmethod
+    def setUpTestData(cls):
+        cls.detective = User.objects.create_user(
+            username="det_mw",
+            email="det_mw@example.com",
+            password="pass12345",
+            phone="09120006000",
+            national_id="6000000000",
+        )
+        cls.user = User.objects.create_user(
+            username="normal_mw",
+            email="normal_mw@example.com",
+            password="pass12345",
+            phone="09120006001",
+            national_id="6000000001",
+        )
+
+        cls.case = Case.objects.create(
+            title="MW Case",
+            description="Desc",
+            crime_level=CrimeLevel.LEVEL_1,
+            status=CaseStatus.ACTIVE,
+            created_by=cls.detective,
+            formed_at=timezone.now() - timezone.timedelta(days=10),
+            assigned_to=cls.detective,
+        )
+
+        cls.suspect = CaseSuspect.objects.create(
+            case=cls.case,
+            first_name="John",
+            last_name="Wanted",
+            national_id="9999999999",
+            phone="09120009999",
+            notes="",
+            proposed_by=cls.detective,
+            proposed_at=timezone.now() - timezone.timedelta(days=5),
+            status=CaseSuspectStatus.APPROVED,
+        )
+
+        # permissions for officer/detective + reward lookup
+        InvestigationsBaseAPITest.grant_perm(cls.detective, Tip, "detective_review_tip")
+        InvestigationsBaseAPITest.grant_perm(cls.detective, Tip, "reward_lookup")
+
+    def test_most_wanted_includes_suspect_with_ranking_and_reward(self):
+        url = reverse("most-wanted")
+        res = self.client.get(url)
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertGreaterEqual(len(res.data), 1)
+        entry = res.data[0]
+        self.assertIn("ranking", entry)
+        self.assertIn("reward_amount", entry)
+        self.assertGreater(entry["ranking"], 0)
+        self.assertGreater(entry["reward_amount"], 0)
+
+    def test_tip_approval_generates_reward_and_lookup_works(self):
+        # user submits tip
+        self.client.force_authenticate(self.user)
+        tip_create_url = reverse("tip-create")
+        res = self.client.post(
+            tip_create_url,
+            {"case": self.case.id, "suspect": self.suspect.id, "details": "I saw him"},
+            format="json",
+        )
+        self.assertEqual(res.status_code, status.HTTP_201_CREATED)
+        tip_id = res.data["id"]
+
+        # officer forwards (reuse detective as officer for test)
+        self.client.force_authenticate(self.detective)
+        officer_url = reverse("tip-officer-review", kwargs={"tip_id": tip_id})
+        InvestigationsBaseAPITest.grant_perm(self.detective, Tip, "officer_review_tip")
+        res_officer = self.client.post(
+            officer_url, {"decision": "forward", "message": "Check this out"}, format="json"
+        )
+        self.assertEqual(res_officer.status_code, status.HTTP_200_OK)
+
+        # detective approves
+        detective_url = reverse("tip-detective-review", kwargs={"tip_id": tip_id})
+        res_det = self.client.post(
+            detective_url, {"decision": "approve", "message": "Useful tip"}, format="json"
+        )
+        self.assertEqual(res_det.status_code, status.HTTP_200_OK)
+
+        # reward exists
+        tip = Tip.objects.get(id=tip_id)
+        self.assertTrue(hasattr(tip, "reward"))
+        reward = tip.reward
+
+        # lookup by police
+        lookup_url = reverse("reward-lookup")
+        res_lookup = self.client.post(
+            lookup_url,
+            {"national_id": self.user.national_id, "reward_code": reward.reward_code},
+            format="json",
+        )
+        self.assertEqual(res_lookup.status_code, status.HTTP_200_OK)
+        self.assertEqual(res_lookup.data["reward_code"], reward.reward_code)
