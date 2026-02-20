@@ -1,0 +1,51 @@
+import React from "react";
+import { Routes, Route, Navigate } from "react-router-dom";
+import { PublicLayout } from "../layouts/PublicLayout";
+import { DashboardLayout } from "../layouts/DashboardLayout";
+import { HomePage } from "../pages/HomePage";
+import { LoginPage } from "../pages/LoginPage";
+import { RegisterPage } from "../pages/RegisterPage";
+import { MostWantedPage } from "../pages/MostWantedPage";
+import { DashboardPage } from "../pages/DashboardPage";
+import { CasesPage } from "../pages/CasesPage";
+import { ComplaintsPage } from "../pages/ComplaintsPage";
+import { EvidencePage } from "../pages/EvidencePage";
+import { BoardPage } from "../pages/BoardPage";
+import { ReportsPage } from "../pages/ReportsPage";
+import { AdminPage } from "../pages/AdminPage";
+import { RequireAuth } from "../auth/RequireAuth";
+
+export const AppRoutes: React.FC = () => {
+  return (
+    <Routes>
+      {/* Public routes */}
+      <Route element={<PublicLayout />}>
+        <Route path="/" element={<HomePage />} />
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/register" element={<RegisterPage />} />
+        <Route path="/most-wanted" element={<MostWantedPage />} />
+      </Route>
+
+      {/* Protected routes */}
+      <Route
+        element={
+          <RequireAuth>
+            <DashboardLayout />
+          </RequireAuth>
+        }
+      >
+        <Route path="/dashboard" element={<DashboardPage />} />
+        <Route path="/cases" element={<CasesPage />} />
+        <Route path="/complaints" element={<ComplaintsPage />} />
+        <Route path="/evidence" element={<EvidencePage />} />
+        <Route path="/board/:caseId" element={<BoardPage />} />
+        <Route path="/reports" element={<ReportsPage />} />
+        <Route path="/admin" element={<AdminPage />} />
+      </Route>
+
+      {/* Fallback */}
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
+  );
+};
+
