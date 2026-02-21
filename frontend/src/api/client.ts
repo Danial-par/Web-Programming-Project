@@ -50,14 +50,22 @@ export async function apiRequest<TResponse>(
   });
 
   const text = await response.text();
-  const maybeJson = text ? JSON.parse(text) : null;
+  let maybeJson: any = null;
+  if (text) {
+    try {
+      maybeJson = JSON.parse(text);
+    } catch {
+      // Some endpoints (or proxy errors) may return HTML/text. Keep UX graceful.
+      maybeJson = null;
+    }
+  }
 
   if (!response.ok) {
     if (response.status === 401 && onUnauthorized) {
       onUnauthorized();
     }
     const payload: ApiErrorPayload = {
-      detail: maybeJson?.detail ?? "Request failed",
+      detail: maybeJson?.detail ?? (text && text.length < 200 ? text : "Request failed"),
       code: maybeJson?.code,
       fields: maybeJson?.fields
     };
@@ -66,4 +74,3 @@ export async function apiRequest<TResponse>(
 
   return maybeJson as TResponse;
 }
-
