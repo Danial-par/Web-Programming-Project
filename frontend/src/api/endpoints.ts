@@ -10,6 +10,7 @@ export const endpoints = {
   statsOverview: "/stats/overview/",
   // Core module endpoints
   cases: "/cases/",
+  caseDetail: (caseId: number | string) => `/cases/${caseId}/`,
   complaints: "/complaints/",
   complaintDetail: (complaintId: number | string) => `/complaints/${complaintId}/`,
   complaintResubmit: (complaintId: number | string) => `/complaints/${complaintId}/resubmit/`,
@@ -19,5 +20,7 @@ export const endpoints = {
   sceneReportDetail: (sceneReportId: number | string) => `/scene-reports/${sceneReportId}/`,
   sceneReportApprove: (sceneReportId: number | string) => `/scene-reports/${sceneReportId}/approve/`,
   evidence: "/evidence/",
+  evidenceDetail: (evidenceId: number | string) => `/evidence/${evidenceId}/`,
+  evidenceForensicResults: (evidenceId: number | string) => `/evidence/${evidenceId}/forensic-results/`,
   boardForCase: (caseId: number | string) => `/cases/${caseId}/board/`
 };

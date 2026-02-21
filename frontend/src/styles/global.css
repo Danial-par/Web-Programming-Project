@@ -310,6 +310,15 @@ a {
   color: var(--text);
 }
 
+.ui-file-input {
+  border-radius: 10px;
+  border: 1px dashed rgba(148, 163, 184, 0.35);
+  padding: 0.55rem 0.65rem;
+  font-size: 0.88rem;
+  background: rgba(15, 23, 42, 0.5);
+  color: var(--text-muted);
+}
+
 .ui-textarea {
   border-radius: 14px;
   border: 1px solid var(--border-subtle);
@@ -339,6 +348,11 @@ a {
   width: 100%;
   border-collapse: collapse;
   font-size: 0.9rem;
+}
+
+.ui-table-wrap {
+  width: 100%;
+  overflow-x: auto;
 }
 
 .ui-table th,
@@ -844,6 +858,46 @@ a {
   margin-bottom: 0.15rem;
 }
 
+.attachment-list {
+  display: grid;
+  gap: 0.7rem;
+}
+
+.attachment-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(140px, 0.8fr) auto;
+  gap: 0.6rem;
+  align-items: end;
+  padding: 0.75rem;
+  border-radius: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  background: rgba(15, 23, 42, 0.45);
+}
+
+.attachment-row__remove {
+  margin-bottom: 0.15rem;
+}
+
+.evidence-attachment-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem 0.75rem;
+}
+
+.evidence-attachment-list--stacked {
+  display: grid;
+  gap: 0.6rem;
+}
+
+.evidence-attachment-item {
+  display: grid;
+  gap: 0.2rem;
+  border: 1px solid rgba(148, 163, 184, 0.15);
+  border-radius: 10px;
+  background: rgba(15, 23, 42, 0.48);
+  padding: 0.6rem 0.75rem;
+}
+
 @media (max-width: 860px) {
   .workflow-header {
     flex-direction: column;
@@ -855,6 +909,14 @@ a {
   }
 
   .witness-row__remove {
+    margin-bottom: 0;
+  }
+
+  .attachment-row {
+    grid-template-columns: 1fr;
+  }
+
+  .attachment-row__remove {
     margin-bottom: 0;
   }
 }

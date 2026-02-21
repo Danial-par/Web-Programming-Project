@@ -34,14 +34,18 @@ export async function apiRequest<TResponse>(
 ): Promise<TResponse> {
   const url = `${API_BASE_URL.replace(/\/$/, "")}/${path.replace(/^\//, "")}`;
 
-  const headers: HeadersInit = {
-    "Content-Type": "application/json",
-    ...(options.headers || {})
-  };
+  const bodyIsFormData =
+    typeof FormData !== "undefined" && options.body && options.body instanceof FormData;
+
+  const headers = new Headers(options.headers || undefined);
+
+  if (!bodyIsFormData && !headers.has("Content-Type")) {
+    headers.set("Content-Type", "application/json");
+  }
 
   const token = getAuthToken();
   if (token) {
-    (headers as Record<string, string>)["Authorization"] = `Bearer ${token}`;
+    headers.set("Authorization", `Bearer ${token}`);
   }
 
   const response = await fetch(url, {
