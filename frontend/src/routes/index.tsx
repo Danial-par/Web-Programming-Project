@@ -8,8 +8,11 @@ import { RegisterPage } from "../pages/RegisterPage";
 import { MostWantedPage } from "../pages/MostWantedPage";
 import { DashboardPage } from "../pages/DashboardPage";
 import { CasesPage } from "../pages/CasesPage";
+import { CaseDetailPage } from "../pages/CaseDetailPage";
+import { CaseSuspectsPlaceholderPage } from "../pages/CaseSuspectsPlaceholderPage";
 import { ComplaintsPage } from "../pages/ComplaintsPage";
 import { EvidencePage } from "../pages/EvidencePage";
+import { EvidenceDetailPage } from "../pages/EvidenceDetailPage";
 import { BoardPage } from "../pages/BoardPage";
 import { ReportsPage } from "../pages/ReportsPage";
 import { AdminPage } from "../pages/AdminPage";
@@ -40,12 +43,15 @@ export const AppRoutes: React.FC = () => {
       >
         <Route path="/dashboard" element={<DashboardPage />} />
         <Route path="/cases" element={<CasesPage />} />
+        <Route path="/cases/:caseId" element={<CaseDetailPage />} />
+        <Route path="/cases/:caseId/suspects" element={<CaseSuspectsPlaceholderPage />} />
         <Route path="/complaints" element={<ComplaintsPage />} />
         <Route path="/complaints/:complaintId" element={<ComplaintDetailPage />} />
         <Route path="/scene-reports" element={<SceneReportsPage />} />
         <Route path="/scene-reports/new" element={<SceneReportCreatePage />} />
         <Route path="/scene-reports/:sceneReportId" element={<SceneReportDetailPage />} />
         <Route path="/evidence" element={<EvidencePage />} />
+        <Route path="/evidence/:evidenceId" element={<EvidenceDetailPage />} />
         <Route path="/board/:caseId" element={<BoardPage />} />
         <Route path="/reports" element={<ReportsPage />} />
         <Route path="/admin" element={<AdminPage />} />
