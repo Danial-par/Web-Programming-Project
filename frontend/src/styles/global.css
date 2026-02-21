@@ -386,6 +386,229 @@ a {
   padding: 0.5rem 0;
 }
 
+/* Public pages */
+
+.public-hero {
+  display: grid;
+  gap: 1rem;
+}
+
+.public-hero__title {
+  margin: 0;
+  font-size: clamp(1.7rem, 3vw, 2.25rem);
+  line-height: 1.1;
+}
+
+.public-hero__subtitle {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 1rem;
+  line-height: 1.6;
+}
+
+.public-hero__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 0.25rem;
+}
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 1rem;
+  margin-top: 1.25rem;
+}
+
+.stat-card {
+  background: rgba(15, 23, 42, 0.7);
+  border: 1px solid rgba(148, 163, 184, 0.15);
+  border-radius: 14px;
+  padding: 1rem 1.1rem;
+}
+
+.stat-card__label {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+}
+
+.stat-card__value {
+  margin-top: 0.35rem;
+  font-size: 1.7rem;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+}
+
+.stat-card__hint {
+  margin-top: 0.6rem;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  line-height: 1.35;
+}
+
+.ui-alert {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.85rem;
+  padding: 0.85rem 1rem;
+  border-radius: 14px;
+  background: rgba(15, 23, 42, 0.75);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-left-width: 4px;
+}
+
+.ui-alert--info {
+  border-left-color: var(--accent);
+}
+
+.ui-alert--error {
+  border-left-color: var(--danger);
+}
+
+.ui-alert--success {
+  border-left-color: #22c55e;
+}
+
+.ui-alert--warning {
+  border-left-color: #fbbf24;
+}
+
+.ui-alert__content {
+  flex: 1;
+  min-width: 0;
+}
+
+.ui-alert__title {
+  font-weight: 650;
+  margin-bottom: 0.25rem;
+}
+
+.ui-alert__message {
+  color: var(--text-muted);
+  font-size: 0.95rem;
+  line-height: 1.45;
+}
+
+.ui-alert__actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.most-wanted-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 1.1rem;
+  margin-top: 1.25rem;
+}
+
+.suspect-card {
+  display: flex;
+  gap: 1rem;
+  padding: 1rem 1.05rem;
+  border-radius: 16px;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  background: rgba(15, 23, 42, 0.72);
+  min-width: 0;
+}
+
+.suspect-card__photo {
+  width: 72px;
+  height: 72px;
+  border-radius: 14px;
+  overflow: hidden;
+  background: rgba(148, 163, 184, 0.08);
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.suspect-card__photo img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.suspect-card__body {
+  flex: 1;
+  min-width: 0;
+}
+
+.suspect-card__rank {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.suspect-card__name {
+  margin: 0.15rem 0 0.45rem;
+  font-weight: 650;
+  font-size: 1.05rem;
+  line-height: 1.15;
+  word-break: break-word;
+}
+
+.suspect-card__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 0.75rem;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+.metric-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  border-radius: 999px;
+  padding: 0.25rem 0.65rem;
+  border: 1px solid rgba(148, 163, 184, 0.15);
+  background: rgba(15, 23, 42, 0.65);
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.metric-pill strong {
+  color: var(--text);
+  font-weight: 650;
+}
+
+.suspect-card__reward {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 0.75rem;
+  margin-top: 0.85rem;
+}
+
+.suspect-card__reward-label {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+}
+
+.suspect-card__reward-value {
+  font-weight: 700;
+  font-size: 1.02rem;
+  white-space: nowrap;
+}
+
+@media (max-width: 420px) {
+  .suspect-card {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .suspect-card__photo {
+    width: 100%;
+    height: 180px;
+  }
+}
+
 .ui-toast-container {
   position: fixed;
   top: 1rem;
@@ -465,4 +688,3 @@ a {
     max-width: none;
   }
 }
-
