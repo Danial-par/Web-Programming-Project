@@ -212,3 +212,7 @@ __pycache__/
 db.sqlite3
 venv/
 .DS_Store
+
+# Frontend dependencies / locks
+frontend/node_modules/
+frontend/package-lock.json
