@@ -21,16 +21,16 @@ export function DataTable<T extends object>({ columns, data, emptyMessage = "No 
     <table className="ui-table">
       <thead>
         <tr>
-          {columns.map((col) => (
-            <th key={String(col.key)}>{col.header}</th>
+          {columns.map((col, colIdx) => (
+            <th key={`${String(col.key)}-${colIdx}`}>{col.header}</th>
           ))}
         </tr>
       </thead>
       <tbody>
         {data.map((row, idx) => (
           <tr key={idx}>
-            {columns.map((col) => (
-              <td key={String(col.key)}>
+            {columns.map((col, colIdx) => (
+              <td key={`${String(col.key)}-${colIdx}`}>
                 {col.render ? col.render(row) : (row[col.key] as React.ReactNode)}
               </td>
             ))}
@@ -40,4 +40,3 @@ export function DataTable<T extends object>({ columns, data, emptyMessage = "No 
     </table>
   );
 }
-
