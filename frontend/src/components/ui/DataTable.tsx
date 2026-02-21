@@ -18,25 +18,27 @@ export function DataTable<T extends object>({ columns, data, emptyMessage = "No 
   }
 
   return (
-    <table className="ui-table">
-      <thead>
-        <tr>
-          {columns.map((col, colIdx) => (
-            <th key={`${String(col.key)}-${colIdx}`}>{col.header}</th>
-          ))}
-        </tr>
-      </thead>
-      <tbody>
-        {data.map((row, idx) => (
-          <tr key={idx}>
+    <div className="ui-table-wrap">
+      <table className="ui-table">
+        <thead>
+          <tr>
             {columns.map((col, colIdx) => (
-              <td key={`${String(col.key)}-${colIdx}`}>
-                {col.render ? col.render(row) : (row[col.key] as React.ReactNode)}
-              </td>
+              <th key={`${String(col.key)}-${colIdx}`}>{col.header}</th>
             ))}
           </tr>
-        ))}
-      </tbody>
-    </table>
+        </thead>
+        <tbody>
+          {data.map((row, idx) => (
+            <tr key={idx}>
+              {columns.map((col, colIdx) => (
+                <td key={`${String(col.key)}-${colIdx}`}>
+                  {col.render ? col.render(row) : (row[col.key] as React.ReactNode)}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }
