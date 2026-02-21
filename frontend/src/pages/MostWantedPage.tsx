@@ -1,72 +1,65 @@
-import React, { useEffect, useState } from "react";
-import { DataTable } from "../components/ui/DataTable";
-import { TableSkeleton } from "../components/ui/TableSkeleton";
-import { apiRequest } from "../api/client";
-import { endpoints } from "../api/endpoints";
-import { useToast } from "../utils/toast";
-
-interface MostWantedRow {
-  suspect_id: number;
-  first_name: string;
-  last_name: string;
-  national_id: string;
-  phone: string;
-  ranking: number;
-  reward_amount: number;
-}
+import React from "react";
+import { fetchMostWanted, MostWantedItem } from "../api/public";
+import { Alert } from "../components/ui/Alert";
+import { Button } from "../components/ui/Button";
+import { MostWantedCard } from "../components/public/MostWantedCard";
+import { MostWantedCardSkeleton } from "../components/public/MostWantedCardSkeleton";
+import { useAsyncData } from "../hooks/useAsyncData";
 
 export const MostWantedPage: React.FC = () => {
-  const [rows, setRows] = useState<MostWantedRow[] | null>(null);
-  const { showError } = useToast();
-
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const data = await apiRequest<MostWantedRow[]>(endpoints.mostWanted);
-        if (!cancelled) {
-          setRows(data);
-        }
-      } catch (err) {
-        console.error(err);
-        if (!cancelled) {
-          showError("Failed to load most wanted list.");
-          setRows([]);
-        }
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [showError]);
+  const {
+    data: items,
+    isLoading,
+    error,
+    refetch
+  } = useAsyncData<MostWantedItem[]>(() => fetchMostWanted(10), []);
 
   return (
     <div>
-      <h1>Most Wanted</h1>
-      <p>Public view of high-priority suspects. Data will be enriched in later steps.</p>
+      <h1 style={{ marginTop: 0 }}>Most Wanted</h1>
+      <p style={{ color: "var(--text-muted)", marginTop: "0.35rem", lineHeight: 1.6 }}>
+        A public list of high‑priority suspects. Rankings and reward amounts are computed by the backend.
+      </p>
 
-      {rows === null && <TableSkeleton rows={5} columns={6} />}
-
-      {rows && rows.length > 0 && (
+      {error && (
         <div style={{ marginTop: "1rem" }}>
-          <DataTable<MostWantedRow>
-            data={rows}
-            columns={[
-              { key: "first_name", header: "First Name" },
-              { key: "last_name", header: "Last Name" },
-              { key: "national_id", header: "National ID" },
-              { key: "phone", header: "Phone" },
-              { key: "ranking", header: "Ranking" },
-              { key: "reward_amount", header: "Reward (Rial)" }
-            ]}
-          />
+          <Alert
+            variant="error"
+            title="We couldn’t load the Most Wanted list"
+            actions={
+              <Button variant="secondary" type="button" onClick={refetch}>
+                Retry
+              </Button>
+            }
+          >
+            Please try again. If the issue continues, the API may be unavailable.
+          </Alert>
         </div>
       )}
 
-      {rows && rows.length === 0 && (
-        <div style={{ marginTop: "1rem" }}>No most wanted suspects at this time.</div>
+      {isLoading && (
+        <div className="most-wanted-grid">
+          {Array.from({ length: 10 }).map((_, idx) => (
+            <MostWantedCardSkeleton key={`mw-skel-${idx}`} />
+          ))}
+        </div>
+      )}
+
+      {!isLoading && items && items.length === 0 && (
+        <div style={{ marginTop: "1rem" }}>
+          <Alert variant="info" title="No suspects found">
+            The backend returned an empty list. Check back later.
+          </Alert>
+        </div>
+      )}
+
+      {!isLoading && items && items.length > 0 && (
+        <div className="most-wanted-grid">
+          {items.map((item, idx) => (
+            <MostWantedCard key={item.suspect_id} item={item} rank={idx + 1} />
+          ))}
+        </div>
       )}
     </div>
   );
 };
-
