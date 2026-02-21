@@ -1,12 +1,15 @@
 import React from "react";
+import { useAuthContext } from "../auth/AuthContext";
 import { fetchMostWanted, MostWantedItem } from "../api/public";
 import { Alert } from "../components/ui/Alert";
+import { BackToDashboardButton } from "../components/ui/BackToDashboardButton";
 import { Button } from "../components/ui/Button";
 import { MostWantedCard } from "../components/public/MostWantedCard";
 import { MostWantedCardSkeleton } from "../components/public/MostWantedCardSkeleton";
 import { useAsyncData } from "../hooks/useAsyncData";
 
 export const MostWantedPage: React.FC = () => {
+  const { user } = useAuthContext();
   const {
     data: items,
     isLoading,
@@ -16,7 +19,10 @@ export const MostWantedPage: React.FC = () => {
 
   return (
     <div>
-      <h1 style={{ marginTop: 0 }}>Most Wanted</h1>
+      <div className="workflow-header">
+        <h1 style={{ marginTop: 0, marginBottom: 0 }}>Most Wanted</h1>
+        {user && <BackToDashboardButton />}
+      </div>
       <p style={{ color: "var(--text-muted)", marginTop: "0.35rem", lineHeight: 1.6 }}>
         A public list of high‑priority suspects. Rankings and reward amounts are computed by the backend.
       </p>

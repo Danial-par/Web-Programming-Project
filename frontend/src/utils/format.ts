@@ -20,3 +20,20 @@ export function formatRial(amount: number | null | undefined, locale?: string): 
   if (amount === null || amount === undefined || Number.isNaN(amount)) return "—";
   return `${formatNumber(amount, locale)} IRR`;
 }
+
+export function formatDateTime(value: string | null | undefined, locale?: string): string {
+  if (!value) return "—";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  try {
+    return new Intl.DateTimeFormat(locale, {
+      year: "numeric",
+      month: "short",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit"
+    }).format(date);
+  } catch {
+    return date.toISOString();
+  }
+}

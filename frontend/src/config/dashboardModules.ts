@@ -25,6 +25,13 @@ export const dashboardModules: DashboardModule[] = [
     requiredRoles: []
   },
   {
+    id: "scene-reports",
+    title: "Scene Reports",
+    description: "Create and review scene reports that can form and activate cases.",
+    path: "/scene-reports",
+    requiredRoles: []
+  },
+  {
     id: "evidence",
     title: "Evidence",
     description: "Register and manage evidence records, attach files and documents.",

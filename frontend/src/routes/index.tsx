@@ -14,6 +14,10 @@ import { BoardPage } from "../pages/BoardPage";
 import { ReportsPage } from "../pages/ReportsPage";
 import { AdminPage } from "../pages/AdminPage";
 import { RequireAuth } from "../auth/RequireAuth";
+import { ComplaintDetailPage } from "../pages/ComplaintDetailPage";
+import { SceneReportsPage } from "../pages/SceneReportsPage";
+import { SceneReportCreatePage } from "../pages/SceneReportCreatePage";
+import { SceneReportDetailPage } from "../pages/SceneReportDetailPage";
 
 export const AppRoutes: React.FC = () => {
   return (
@@ -37,6 +41,10 @@ export const AppRoutes: React.FC = () => {
         <Route path="/dashboard" element={<DashboardPage />} />
         <Route path="/cases" element={<CasesPage />} />
         <Route path="/complaints" element={<ComplaintsPage />} />
+        <Route path="/complaints/:complaintId" element={<ComplaintDetailPage />} />
+        <Route path="/scene-reports" element={<SceneReportsPage />} />
+        <Route path="/scene-reports/new" element={<SceneReportCreatePage />} />
+        <Route path="/scene-reports/:sceneReportId" element={<SceneReportDetailPage />} />
         <Route path="/evidence" element={<EvidencePage />} />
         <Route path="/board/:caseId" element={<BoardPage />} />
         <Route path="/reports" element={<ReportsPage />} />
@@ -48,4 +56,3 @@ export const AppRoutes: React.FC = () => {
     </Routes>
   );
 };
-
