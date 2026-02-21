@@ -22,6 +22,12 @@ export const DashboardLayout: React.FC = () => {
           <Link to="/dashboard" onClick={() => setSidebarOpen(false)}>
             Dashboard
           </Link>
+          <Link to="/" onClick={() => setSidebarOpen(false)}>
+            Public Home
+          </Link>
+          <Link to="/most-wanted" onClick={() => setSidebarOpen(false)}>
+            Most Wanted
+          </Link>
           <Link to="/cases" onClick={() => setSidebarOpen(false)}>
             Cases
           </Link>
@@ -73,4 +79,3 @@ export const DashboardLayout: React.FC = () => {
     </div>
   );
 };
-
