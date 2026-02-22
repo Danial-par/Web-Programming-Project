@@ -5,14 +5,15 @@ from rest_framework.permissions import AllowAny, IsAuthenticated, IsAdminUser
 from rest_framework_simplejwt.views import TokenObtainPairView
 from django.contrib.auth.models import Group
 from django.contrib.auth import get_user_model
+from django.db.models import Q
 from rest_framework.decorators import action
 from drf_spectacular.utils import extend_schema, OpenApiParameter
 
 from .serializers import (
-    UserRegistrationSerializer, 
+    UserRegistrationSerializer,
     CustomTokenObtainPairSerializer,
     UserSerializer,
-    GroupSerializer
+    GroupSerializer,
 )
 
 User = get_user_model()
@@ -43,9 +44,39 @@ class RoleViewSet(viewsets.ModelViewSet):
 
 class UserRoleManagementView(viewsets.ViewSet):
     """
-    Admin endpoints to assign/remove roles to users.
+    Admin-only: list/retrieve users, assign/remove roles.
     """
     permission_classes = [IsAdminUser]
+
+    def get_queryset(self):
+        qs = User.objects.all().order_by("username")
+        q = self.request.query_params.get("q") or self.request.query_params.get("search")
+        if q and q.strip():
+            term = q.strip()
+            qs = qs.filter(
+                Q(username__icontains=term)
+                | Q(email__icontains=term)
+                | Q(first_name__icontains=term)
+                | Q(last_name__icontains=term)
+            )
+        return qs
+
+    @extend_schema(
+        parameters=[OpenApiParameter(name="q", description="Search by username, email, first/last name", required=False)],
+        responses={200: UserSerializer(many=True)},
+    )
+    def list(self, request):
+        users = self.get_queryset()
+        serializer = UserSerializer(users, many=True)
+        return Response(serializer.data)
+
+    @extend_schema(responses={200: UserSerializer})
+    def retrieve(self, request, pk=None):
+        try:
+            user = User.objects.get(pk=pk)
+        except User.DoesNotExist:
+            return Response({"detail": "User not found."}, status=status.HTTP_404_NOT_FOUND)
+        return Response(UserSerializer(user).data)
 
     @extend_schema(
         request=GroupSerializer,

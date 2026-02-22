@@ -42,7 +42,7 @@ class UserSerializer(serializers.ModelSerializer):
         fields = ('id', 'username', 'email', 'phone', 'national_id', 'first_name', 'last_name', 'roles')
 
     def get_roles(self, obj):
-        return obj.groups.values_list('name', flat=True)
+        return list(obj.groups.values_list("name", flat=True))
 
 class GroupSerializer(serializers.ModelSerializer):
     class Meta:
