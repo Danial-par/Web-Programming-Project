@@ -1225,3 +1225,96 @@ a {
   font-size: 0.82rem;
   color: var(--text-muted);
 }
+
+/* Reports */
+
+.reports-page {
+  padding-bottom: 1rem;
+}
+
+.workflow-list {
+  display: grid;
+  gap: 0.5rem;
+  margin-top: 0.4rem;
+}
+
+.workflow-list__item {
+  border: 1px solid rgba(148, 163, 184, 0.15);
+  border-radius: 10px;
+  background: rgba(15, 23, 42, 0.45);
+  padding: 0.55rem 0.7rem;
+  font-size: 0.9rem;
+  color: var(--text);
+}
+
+.reports-suspect-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 0.9rem;
+}
+
+.reports-trial-block {
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 12px;
+  background: rgba(2, 6, 23, 0.35);
+  padding: 0.75rem;
+}
+
+.reports-police-box {
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 12px;
+  background: rgba(15, 23, 42, 0.45);
+  padding: 0.75rem;
+}
+
+.print-hidden {
+  display: block;
+}
+
+@media print {
+  :root {
+    color-scheme: light;
+  }
+
+  body {
+    background: #fff;
+    color: #0f172a;
+  }
+
+  .app-sidebar,
+  .app-topbar,
+  .ui-toast-container,
+  .print-hidden {
+    display: none !important;
+  }
+
+  .app-main--dashboard {
+    margin-left: 0;
+    padding: 0;
+  }
+
+  .ui-card {
+    background: #fff;
+    color: #111827;
+    border: 1px solid #cbd5e1;
+    box-shadow: none;
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .workflow-muted,
+  .workflow-kv__label {
+    color: #374151;
+  }
+
+  .status-pill {
+    border-color: #9ca3af;
+    color: #111827 !important;
+    background: #f3f4f6 !important;
+  }
+
+  a {
+    color: #1d4ed8;
+    text-decoration: underline;
+  }
+}
