@@ -47,5 +47,13 @@ export const endpoints = {
     `/cases/${caseId}/suspects/${suspectId}/interrogation/chief/`,
 
   // Notifications
-  notifications: "/notifications/"
+  notifications: "/notifications/",
+
+  // Admin (roles + users)
+  roles: "/roles/",
+  roleDetail: (roleId: number | string) => `/roles/${roleId}/`,
+  users: "/users/",
+  userDetail: (userId: number | string) => `/users/${userId}/`,
+  userAssignRole: (userId: number | string) => `/users/${userId}/assign-role/`,
+  userRemoveRole: (userId: number | string) => `/users/${userId}/remove-role/`,
 };
