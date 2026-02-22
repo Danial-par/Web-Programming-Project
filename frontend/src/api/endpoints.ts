@@ -10,6 +10,8 @@ export const endpoints = {
   cases: "/cases/",
   caseDetail: (caseId: number | string) => `/cases/${caseId}/`,
   caseReport: (caseId: number | string) => `/cases/${caseId}/report/`,
+  caseSuspectTrial: (caseId: number | string, suspectId: number | string) =>
+    `/cases/${caseId}/suspects/${suspectId}/trial/`,
   complaints: "/complaints/",
   complaintDetail: (complaintId: number | string) => `/complaints/${complaintId}/`,
   complaintResubmit: (complaintId: number | string) => `/complaints/${complaintId}/resubmit/`,
