@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { Link, Outlet } from "react-router-dom";
 import { useAuthContext } from "../auth/AuthContext";
 import { Button } from "../components/ui/Button";
+import { NotificationsMenu } from "../components/notifications/NotificationsMenu";
 
 export const DashboardLayout: React.FC = () => {
   const { user, logout } = useAuthContext();
@@ -62,10 +63,15 @@ export const DashboardLayout: React.FC = () => {
           >
             ☰
           </button>
+
           <div className="app-topbar__user">
             <span className="app-topbar__user-name">{fullName}</span>
             <span className="app-topbar__user-roles">{rolesDisplay}</span>
           </div>
+
+          {/* Step 7: Notifications */}
+          <NotificationsMenu />
+
           <Button variant="ghost" type="button" onClick={logout} className="app-topbar__logout">
             Logout
           </Button>
