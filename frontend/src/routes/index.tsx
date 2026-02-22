@@ -9,7 +9,7 @@ import { MostWantedPage } from "../pages/MostWantedPage";
 import { DashboardPage } from "../pages/DashboardPage";
 import { CasesPage } from "../pages/CasesPage";
 import { CaseDetailPage } from "../pages/CaseDetailPage";
-import { CaseSuspectsPlaceholderPage } from "../pages/CaseSuspectsPlaceholderPage";
+import { CaseSuspectsPage } from "../pages/CaseSuspectsPage";
 import { ComplaintsPage } from "../pages/ComplaintsPage";
 import { EvidencePage } from "../pages/EvidencePage";
 import { EvidenceDetailPage } from "../pages/EvidenceDetailPage";
@@ -44,7 +44,7 @@ export const AppRoutes: React.FC = () => {
         <Route path="/dashboard" element={<DashboardPage />} />
         <Route path="/cases" element={<CasesPage />} />
         <Route path="/cases/:caseId" element={<CaseDetailPage />} />
-        <Route path="/cases/:caseId/suspects" element={<CaseSuspectsPlaceholderPage />} />
+        <Route path="/cases/:caseId/suspects" element={<CaseSuspectsPage />} />
         <Route path="/complaints" element={<ComplaintsPage />} />
         <Route path="/complaints/:complaintId" element={<ComplaintDetailPage />} />
         <Route path="/scene-reports" element={<SceneReportsPage />} />
