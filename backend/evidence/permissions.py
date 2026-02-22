@@ -2,6 +2,13 @@ from __future__ import annotations
 
 from rest_framework.permissions import BasePermission
 
+from common.role_helpers import (
+    user_can_add_evidence,
+    user_can_change_evidence,
+    user_can_delete_evidence,
+    user_can_fill_forensic_results,
+    user_can_view_all_cases,
+)
 from cases.models import Case
 
 
@@ -13,7 +20,7 @@ def user_can_access_case(user, case: Case) -> bool:
     if not user.is_authenticated:
         return False
 
-    if user.has_perm("cases.view_all_cases"):
+    if user_can_view_all_cases(user):
         return True
 
     return (
@@ -31,24 +38,24 @@ class CanViewEvidence(BasePermission):
 class CanCreateEvidence(BasePermission):
     def has_permission(self, request, view):
         if request.method == "POST" and view.action == "create":
-            return request.user.is_authenticated and request.user.has_perm("evidence.add_evidence")
+            return request.user.is_authenticated and user_can_add_evidence(request.user)
         return True
 
 
 class CanUpdateEvidence(BasePermission):
     def has_permission(self, request, view):
         if request.method in ["PUT", "PATCH"] and view.action in ["update", "partial_update"]:
-            return request.user.is_authenticated and request.user.has_perm("evidence.change_evidence")
+            return request.user.is_authenticated and user_can_change_evidence(request.user)
         return True
 
 
 class CanDeleteEvidence(BasePermission):
     def has_permission(self, request, view):
         if request.method == "DELETE" and view.action == "destroy":
-            return request.user.is_authenticated and request.user.has_perm("evidence.delete_evidence")
+            return request.user.is_authenticated and user_can_delete_evidence(request.user)
         return True
 
 
 class CanFillForensicResults(BasePermission):
     def has_permission(self, request, view):
-        return request.user.is_authenticated and request.user.has_perm("evidence.fill_forensic_results")
+        return request.user.is_authenticated and user_can_fill_forensic_results(request.user)

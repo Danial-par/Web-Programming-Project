@@ -66,7 +66,8 @@ def _get_case_or_404_for_user(user, case_id: int) -> Case:
 
 
 def _require_assigned_detective(user, case: Case) -> bool:
-    return user_is_assigned_detective(user, case) or user.has_perm("cases.view_all_cases")
+    from common.role_helpers import user_can_view_all_cases
+    return user_is_assigned_detective(user, case) or user_can_view_all_cases(user)
 
 
 def _get_suspect_or_404(case: Case, suspect_id: int) -> CaseSuspect:
@@ -150,7 +151,8 @@ class CaseBoardView(APIView):
                 {"detail": "Only the assigned detective can update the board.", "code": "forbidden"},
                 status=status.HTTP_403_FORBIDDEN,
             )
-        if not request.user.has_perm("investigations.change_detectiveboard"):
+        from common.role_helpers import user_can_change_detective_board
+        if not user_can_change_detective_board(request.user):
             return Response(
                 {"detail": "Missing permission: investigations.change_detectiveboard", "code": "forbidden"},
                 status=status.HTTP_403_FORBIDDEN,
@@ -206,7 +208,8 @@ class CaseBoardItemCreateView(APIView):
                 {"detail": "Only the assigned detective can manage board items.", "code": "forbidden"},
                 status=status.HTTP_403_FORBIDDEN,
             )
-        if not request.user.has_perm("investigations.add_boarditem"):
+        from common.role_helpers import user_can_add_board_item
+        if not user_can_add_board_item(request.user):
             return Response(
                 {"detail": "Missing permission: investigations.add_boarditem", "code": "forbidden"},
                 status=status.HTTP_403_FORBIDDEN,
@@ -259,7 +262,8 @@ class CaseBoardItemDetailView(APIView):
                 {"detail": "Only the assigned detective can manage board items.", "code": "forbidden"},
                 status=status.HTTP_403_FORBIDDEN,
             )
-        if not request.user.has_perm("investigations.change_boarditem"):
+        from common.role_helpers import user_can_change_board_item
+        if not user_can_change_board_item(request.user):
             return Response(
                 {"detail": "Missing permission: investigations.change_boarditem", "code": "forbidden"},
                 status=status.HTTP_403_FORBIDDEN,
@@ -289,7 +293,8 @@ class CaseBoardItemDetailView(APIView):
                 {"detail": "Only the assigned detective can manage board items.", "code": "forbidden"},
                 status=status.HTTP_403_FORBIDDEN,
             )
-        if not request.user.has_perm("investigations.delete_boarditem"):
+        from common.role_helpers import user_can_delete_board_item
+        if not user_can_delete_board_item(request.user):
             return Response(
                 {"detail": "Missing permission: investigations.delete_boarditem", "code": "forbidden"},
                 status=status.HTTP_403_FORBIDDEN,
@@ -319,7 +324,8 @@ class CaseBoardConnectionCreateView(APIView):
                 {"detail": "Only the assigned detective can manage board connections.", "code": "forbidden"},
                 status=status.HTTP_403_FORBIDDEN,
             )
-        if not request.user.has_perm("investigations.add_boardconnection"):
+        from common.role_helpers import user_can_add_board_connection
+        if not user_can_add_board_connection(request.user):
             return Response(
                 {"detail": "Missing permission: investigations.add_boardconnection", "code": "forbidden"},
                 status=status.HTTP_403_FORBIDDEN,
@@ -368,7 +374,8 @@ class CaseBoardConnectionDetailView(APIView):
                 {"detail": "Only the assigned detective can manage board connections.", "code": "forbidden"},
                 status=status.HTTP_403_FORBIDDEN,
             )
-        if not request.user.has_perm("investigations.delete_boardconnection"):
+        from common.role_helpers import user_can_delete_board_connection
+        if not user_can_delete_board_connection(request.user):
             return Response(
                 {"detail": "Missing permission: investigations.delete_boardconnection", "code": "forbidden"},
                 status=status.HTTP_403_FORBIDDEN,
@@ -436,7 +443,8 @@ class CaseSuspectProposeView(APIView):
                 {"detail": "Only the assigned detective can propose suspects.", "code": "forbidden"},
                 status=status.HTTP_403_FORBIDDEN,
             )
-        if not request.user.has_perm("investigations.propose_case_suspect"):
+        from common.role_helpers import user_can_propose_case_suspect
+        if not user_can_propose_case_suspect(request.user):
             return Response(
                 {"detail": "Missing permission: investigations.propose_case_suspect", "code": "forbidden"},
                 status=status.HTTP_403_FORBIDDEN,
@@ -478,12 +486,13 @@ class CaseSuspectReviewView(APIView):
     )
     def post(self, request, case_id: int, suspect_id: int):
         # Allow sergeants to reach this endpoint without being a participant.
-        if request.user.has_perm("investigations.review_case_suspect") or request.user.has_perm("cases.view_all_cases"):
+        from common.role_helpers import user_can_review_case_suspect, user_can_view_all_cases
+        if user_can_review_case_suspect(request.user) or user_can_view_all_cases(request.user):
             case = get_object_or_404(Case, id=case_id)
         else:
             case = _get_case_or_404_for_user(request.user, case_id)
 
-        if not request.user.has_perm("investigations.review_case_suspect"):
+        if not user_can_review_case_suspect(request.user):
             return Response(
                 {"detail": "Missing permission: investigations.review_case_suspect", "code": "forbidden"},
                 status=status.HTTP_403_FORBIDDEN,
@@ -536,7 +545,8 @@ class SuspectInterrogationDetectiveView(APIView):
                 {"detail": "Only the assigned detective can submit interrogation score.", "code": "forbidden"},
                 status=status.HTTP_403_FORBIDDEN,
             )
-        if not request.user.has_perm("investigations.submit_detective_interrogation"):
+        from common.role_helpers import user_can_submit_detective_interrogation
+        if not user_can_submit_detective_interrogation(request.user):
             return Response(
                 {"detail": "Missing permission: investigations.submit_detective_interrogation", "code": "forbidden"},
                 status=status.HTTP_403_FORBIDDEN,
@@ -572,13 +582,14 @@ class SuspectInterrogationSergeantView(APIView):
         description="Sergeant submits interrogation score (1..10).",
     )
     def post(self, request, case_id: int, suspect_id: int):
+        from common.role_helpers import user_can_submit_sergeant_interrogation, user_can_view_all_cases
         # sergeants can access case without being a participant (similar to suspect review)
-        if request.user.has_perm("investigations.submit_sergeant_interrogation") or request.user.has_perm("cases.view_all_cases"):
+        if user_can_submit_sergeant_interrogation(request.user) or user_can_view_all_cases(request.user):
             case = get_object_or_404(Case, id=case_id)
         else:
             case = _get_case_or_404_for_user(request.user, case_id)
 
-        if not request.user.has_perm("investigations.submit_sergeant_interrogation"):
+        if not user_can_submit_sergeant_interrogation(request.user):
             return Response(
                 {"detail": "Missing permission: investigations.submit_sergeant_interrogation", "code": "forbidden"},
                 status=status.HTTP_403_FORBIDDEN,
@@ -614,12 +625,13 @@ class SuspectInterrogationCaptainDecisionView(APIView):
         description="Captain submits final decision for interrogation. Requires detective+sergeant scores to exist.",
     )
     def post(self, request, case_id: int, suspect_id: int):
-        if request.user.has_perm("investigations.submit_captain_interrogation_decision") or request.user.has_perm("cases.view_all_cases"):
+        from common.role_helpers import user_can_submit_captain_interrogation_decision, user_can_view_all_cases
+        if user_can_submit_captain_interrogation_decision(request.user) or user_can_view_all_cases(request.user):
             case = get_object_or_404(Case, id=case_id)
         else:
             case = _get_case_or_404_for_user(request.user, case_id)
 
-        if not request.user.has_perm("investigations.submit_captain_interrogation_decision"):
+        if not user_can_submit_captain_interrogation_decision(request.user):
             return Response(
                 {"detail": "Missing permission: investigations.submit_captain_interrogation_decision", "code": "forbidden"},
                 status=status.HTTP_403_FORBIDDEN,
@@ -670,12 +682,13 @@ class SuspectInterrogationChiefReviewView(APIView):
         description="Chief approves/rejects captain decision for CRITICAL cases. Reject requires a message.",
     )
     def post(self, request, case_id: int, suspect_id: int):
-        if request.user.has_perm("investigations.review_critical_interrogation") or request.user.has_perm("cases.view_all_cases"):
+        from common.role_helpers import user_can_review_critical_interrogation, user_can_view_all_cases
+        if user_can_review_critical_interrogation(request.user) or user_can_view_all_cases(request.user):
             case = get_object_or_404(Case, id=case_id)
         else:
             case = _get_case_or_404_for_user(request.user, case_id)
 
-        if not request.user.has_perm("investigations.review_critical_interrogation"):
+        if not user_can_review_critical_interrogation(request.user):
             return Response(
                 {"detail": "Missing permission: investigations.review_critical_interrogation", "code": "forbidden"},
                 status=status.HTTP_403_FORBIDDEN,
@@ -808,7 +821,8 @@ class TipOfficerReviewView(APIView):
         description="Officer review: reject tip or forward to responsible detective.",
     )
     def post(self, request, tip_id: int):
-        if not request.user.has_perm("investigations.officer_review_tip"):
+        from common.role_helpers import user_can_officer_review_tip
+        if not user_can_officer_review_tip(request.user):
             return Response(
                 {"detail": "Missing permission: investigations.officer_review_tip", "code": "forbidden"},
                 status=status.HTTP_403_FORBIDDEN,
@@ -860,7 +874,8 @@ class TipDetectiveReviewView(APIView):
         description="Detective review: approve (generate reward) or reject tip.",
     )
     def post(self, request, tip_id: int):
-        if not request.user.has_perm("investigations.detective_review_tip"):
+        from common.role_helpers import user_can_detective_review_tip, user_can_view_all_cases
+        if not user_can_detective_review_tip(request.user):
             return Response(
                 {"detail": "Missing permission: investigations.detective_review_tip", "code": "forbidden"},
                 status=status.HTTP_403_FORBIDDEN,
@@ -875,7 +890,7 @@ class TipDetectiveReviewView(APIView):
             )
 
         # If case is set, ensure requesting user is assigned detective for that case (when applicable)
-        if tip.case and tip.case.assigned_to_id and tip.case.assigned_to_id != request.user.id and not request.user.has_perm("cases.view_all_cases"):
+        if tip.case and tip.case.assigned_to_id and tip.case.assigned_to_id != request.user.id and not user_can_view_all_cases(request.user):
             return Response(
                 {"detail": "Only assigned detective can review this tip.", "code": "forbidden"},
                 status=status.HTTP_403_FORBIDDEN,
@@ -951,7 +966,8 @@ class RewardLookupView(APIView):
         description="Lookup reward by national_id + reward_code (police-only).",
     )
     def post(self, request):
-        if not request.user.has_perm("investigations.reward_lookup"):
+        from common.role_helpers import user_can_reward_lookup
+        if not user_can_reward_lookup(request.user):
             return Response(
                 {"detail": "Missing permission: investigations.reward_lookup", "code": "forbidden"},
                 status=status.HTTP_403_FORBIDDEN,

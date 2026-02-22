@@ -47,7 +47,8 @@ class EvidenceViewSet(ModelViewSet):
         if not user.is_authenticated:
             return qs.none()
 
-        if user.has_perm("cases.view_all_cases"):
+        from common.role_helpers import user_can_view_all_cases
+        if user_can_view_all_cases(user):
             filtered = qs
         else:
             filtered = qs.filter(

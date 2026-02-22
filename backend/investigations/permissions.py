@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from common.role_helpers import user_can_view_all_cases
 from cases.models import Case
 
 
@@ -11,7 +12,7 @@ def user_can_access_case(user, case: Case) -> bool:
     if not user.is_authenticated:
         return False
 
-    if user.has_perm("cases.view_all_cases"):
+    if user_can_view_all_cases(user):
         return True
 
     return (
