@@ -13,6 +13,12 @@ from drf_spectacular.utils import extend_schema
 
 from investigations.models import CaseSuspect, Interrogation
 
+from common.role_helpers import (
+    user_can_see_all_complaints,
+    user_can_view_all_cases,
+    user_can_view_all_scene_reports,
+    user_can_view_case_report,
+)
 from .models import Case, CaseParticipant, Complaint, ComplaintComplainant, PaymentIntent, PaymentStatus, SceneReport, Trial
 from .constants import CaseStatus, ComplaintStatus, ComplaintComplainantStatus, SceneReportStatus
 from .serializers import (
@@ -68,7 +74,7 @@ class CaseViewSet(ModelViewSet):
     def get_queryset(self):
         user = self.request.user
 
-        if user.has_perm("cases.view_all_cases"):
+        if user_can_view_all_cases(user):
             return Case.objects.all()
 
         return Case.objects.filter(
@@ -92,12 +98,7 @@ class CaseViewSet(ModelViewSet):
     )
     def report(self, request, pk=None):
         # For privileged roles, do not rely on the default queryset scoping (avoid 404).
-        if (
-            request.user.has_perm("cases.view_all_cases")
-            or request.user.has_perm("cases.judge_verdict_trial")
-            or request.user.has_perm("investigations.submit_captain_interrogation_decision")
-            or request.user.has_perm("investigations.review_critical_interrogation")
-        ):
+        if user_can_view_case_report(request.user):
             case = get_object_or_404(Case.objects.all(), pk=pk)
         else:
             case = get_object_or_404(self.get_queryset(), pk=pk)
@@ -260,11 +261,7 @@ class ComplaintViewSet(viewsets.ModelViewSet):
         user = self.request.user
         qs = super().get_queryset()
 
-        if (
-                user.has_perm("cases.view_all_complaints")
-                or user.has_perm("cases.cadet_review_complaint")
-                or user.has_perm("cases.officer_review_complaint")
-        ):
+        if user_can_see_all_complaints(user):
             return qs
 
         return qs.filter(
@@ -485,7 +482,7 @@ class SceneReportViewSet(ModelViewSet):
         user = self.request.user
         qs = super().get_queryset()
 
-        if user.has_perm("cases.view_all_scene_reports") or user.has_perm("cases.approve_scene_report"):
+        if user_can_view_all_scene_reports(user):
             return qs
 
         return qs.filter(created_by=user)

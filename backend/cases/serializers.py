@@ -2,6 +2,7 @@ from django.contrib.auth import get_user_model
 from django.utils import timezone
 from rest_framework import serializers
 
+from common.role_helpers import user_can_auto_approve_scene_report
 from investigations.models import CaseSuspect, Interrogation
 
 from .models import (
@@ -216,8 +217,8 @@ class SceneReportCreateSerializer(serializers.Serializer):
         for w in witnesses_data:
             SceneWitness.objects.create(scene_report=scene_report, **w)
 
-        # Chief bypass (permission)
-        if user.has_perm("cases.auto_approve_scene_report"):
+        # Chief bypass (permission or Chief/Admin role)
+        if user_can_auto_approve_scene_report(user):
             scene_report.status = SceneReportStatus.APPROVED
             scene_report.approved_by = user
             scene_report.approved_at = timezone.now()
