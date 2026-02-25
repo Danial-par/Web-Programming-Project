@@ -9,6 +9,7 @@ export const endpoints = {
   // Core module endpoints
   cases: "/cases/",
   caseDetail: (caseId: number | string) => `/cases/${caseId}/`,
+  caseAssignDetective: (caseId: number | string) => `/cases/${caseId}/assign-detective/`,
   caseReport: (caseId: number | string) => `/cases/${caseId}/report/`,
   caseSuspectTrial: (caseId: number | string, suspectId: number | string) =>
     `/cases/${caseId}/suspects/${suspectId}/trial/`,

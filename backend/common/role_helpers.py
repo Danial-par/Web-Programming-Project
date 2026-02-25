@@ -102,6 +102,15 @@ def user_can_judge_verdict_trial(user):
     return has_perm_or_role(user, ["cases.judge_verdict_trial"], (ROLE_JUDGE,))
 
 
+def user_can_assign_detective(user):
+    """Captain/Chief/Admin (or explicit permission) can assign detective to a case."""
+    return has_perm_or_role(
+        user,
+        ["cases.view_all_cases"],
+        (ROLE_CAPTAIN, ROLE_CHIEF, ROLE_ADMIN),
+    )
+
+
 # ----- Cases: scene reports -----
 def user_can_view_all_scene_reports(user):
     return has_perm_or_role(

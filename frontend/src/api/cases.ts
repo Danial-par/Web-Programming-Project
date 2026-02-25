@@ -31,3 +31,10 @@ export function listCases(): Promise<CaseListItem[]> {
 export function getCase(caseId: number | string): Promise<CaseDetail> {
   return apiRequest<CaseDetail>(endpoints.caseDetail(caseId), { method: "GET" });
 }
+
+export function assignCaseDetective(caseId: number | string, detectiveId: number): Promise<CaseDetail> {
+  return apiRequest<CaseDetail>(endpoints.caseAssignDetective(caseId), {
+    method: "POST",
+    body: JSON.stringify({ detective_id: detectiveId })
+  });
+}

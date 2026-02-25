@@ -1,3 +1,4 @@
+from django.contrib.auth import get_user_model
 from django.db import models, transaction
 from django.db.models import Q
 from django.shortcuts import get_object_or_404, render
@@ -14,6 +15,8 @@ from drf_spectacular.utils import extend_schema
 from investigations.models import CaseSuspect, Interrogation
 
 from common.role_helpers import (
+    ROLE_DETECTIVE,
+    user_can_assign_detective,
     user_can_see_all_complaints,
     user_can_view_all_cases,
     user_can_view_all_scene_reports,
@@ -55,6 +58,9 @@ from .permissions import (
 )
 
 
+User = get_user_model()
+
+
 class CaseViewSet(ModelViewSet):
     permission_classes = [
         IsAuthenticated,
@@ -85,6 +91,60 @@ class CaseViewSet(ModelViewSet):
 
     def perform_create(self, serializer):
         serializer.save(created_by=self.request.user)
+
+    @extend_schema(
+        request={
+            "type": "object",
+            "properties": {"detective_id": {"type": "integer"}},
+            "required": ["detective_id"],
+        },
+        responses={200: CaseDetailSerializer},
+        description="Assign a detective (user in 'Detective' role) to this case (assigned_to).",
+    )
+    @action(detail=True, methods=["post"], url_path="assign-detective")
+    def assign_detective(self, request, pk=None):
+        """Assign the detective in charge for a case.
+
+        - Only Captain/Chief/Admin (or users with cases.view_all_cases) may assign.
+        - The target user must belong to the 'Detective' role (group).
+        """
+        if not user_can_assign_detective(request.user):
+            return Response(
+                {"detail": "You are not allowed to assign detectives to cases.", "code": "forbidden"},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        case = self.get_object()
+
+        detective_id = request.data.get("detective_id")
+        if not detective_id:
+            return Response(
+                {"detail": "detective_id is required.", "code": "invalid_payload"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            detective = User.objects.get(pk=detective_id)
+        except User.DoesNotExist:
+            return Response(
+                {"detail": "Detective user not found.", "code": "user_not_found"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        # Ensure target user has Detective role
+        if not detective.groups.filter(name=ROLE_DETECTIVE).exists():
+            return Response(
+                {
+                    "detail": "Selected user is not in the 'Detective' role.",
+                    "code": "not_detective",
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        case.assigned_to = detective
+        case.save(update_fields=["assigned_to"])
+
+        return Response(CaseDetailSerializer(case).data, status=status.HTTP_200_OK)
 
     @extend_schema(
         responses={200: CaseReportSerializer},

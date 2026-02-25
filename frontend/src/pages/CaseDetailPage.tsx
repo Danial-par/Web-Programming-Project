@@ -1,6 +1,6 @@
-import React from "react";
+import React, { useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { CaseDetail, getCase } from "../api/cases";
+import { CaseDetail, getCase, assignCaseDetective } from "../api/cases";
 import { Alert } from "../components/ui/Alert";
 import { Button } from "../components/ui/Button";
 import { Card } from "../components/ui/Card";
@@ -8,11 +8,19 @@ import { PageSkeleton } from "../components/ui/PageSkeleton";
 import { useAsyncData } from "../hooks/useAsyncData";
 import { formatDateTime } from "../utils/format";
 import { formatWorkflowLabel } from "../utils/workflow";
+import { useAuthContext } from "../auth/AuthContext";
+import { RoleGuard } from "../auth/rbac";
+import { useToast } from "../utils/toast";
 
 export const CaseDetailPage: React.FC = () => {
   const params = useParams();
   const caseId = Number(params.caseId);
   const isValidId = Number.isInteger(caseId) && caseId > 0;
+
+  const { user } = useAuthContext();
+  const { showError, showSuccess } = useToast();
+  const [detectiveIdInput, setDetectiveIdInput] = useState("");
+  const [isAssigning, setIsAssigning] = useState(false);
 
   const {
     data: caseDetail,
@@ -56,6 +64,35 @@ export const CaseDetailPage: React.FC = () => {
       </Alert>
     );
   }
+
+  const handleAssignDetective = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!caseDetail) return;
+
+    const trimmed = detectiveIdInput.trim();
+    if (!trimmed) {
+      showError("Detective user ID is required.");
+      return;
+    }
+
+    const numericId = Number(trimmed);
+    if (!Number.isInteger(numericId) || numericId <= 0) {
+      showError("Detective user ID must be a positive integer.");
+      return;
+    }
+
+    setIsAssigning(true);
+    try {
+      await assignCaseDetective(caseDetail.id, numericId);
+      showSuccess("Detective assigned to case.");
+      setDetectiveIdInput("");
+      await refetch();
+    } catch (err) {
+      showError(err instanceof Error ? err.message : "Failed to assign detective.");
+    } finally {
+      setIsAssigning(false);
+    }
+  };
 
   return (
     <div className="workflow-stack">
@@ -106,6 +143,36 @@ export const CaseDetailPage: React.FC = () => {
             <div className="workflow-kv__value">{caseDetail.assigned_to ?? "Unassigned"}</div>
           </div>
         </div>
+
+        <RoleGuard roles={["Captain", "Chief", "Admin"]}>
+          <form
+            onSubmit={handleAssignDetective}
+            style={{
+              marginTop: "1.25rem",
+              display: "flex",
+              gap: "0.75rem",
+              alignItems: "flex-end",
+              flexWrap: "wrap"
+            }}
+          >
+            <div className="workflow-field">
+              <label className="ui-field__label" htmlFor="detective-id">
+                Assign detective user ID
+              </label>
+              <input
+                id="detective-id"
+                name="detective-id"
+                className="ui-input"
+                placeholder="Enter detective user ID (Detective role)"
+                value={detectiveIdInput}
+                onChange={(e) => setDetectiveIdInput(e.target.value)}
+              />
+            </div>
+            <Button type="submit" disabled={isAssigning}>
+              {isAssigning ? "Assigning..." : "Assign detective"}
+            </Button>
+          </form>
+        </RoleGuard>
 
         <div style={{ marginTop: "1rem" }}>
           <div className="workflow-kv__label">Description</div>
