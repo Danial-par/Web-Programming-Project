@@ -94,7 +94,7 @@ def user_can_view_case_report(user):
             "investigations.submit_captain_interrogation_decision",
             "investigations.review_critical_interrogation",
         ],
-        (ROLE_JUDGE, ROLE_CAPTAIN, ROLE_CHIEF, ROLE_ADMIN),
+        (ROLE_DETECTIVE, ROLE_SERGEANT, ROLE_JUDGE, ROLE_CAPTAIN, ROLE_CHIEF, ROLE_ADMIN),
     )
 
 
@@ -206,7 +206,7 @@ def user_can_review_case_suspect(user):
     return has_perm_or_role(
         user,
         ["investigations.review_case_suspect"],
-        (ROLE_DETECTIVE, ROLE_CAPTAIN, ROLE_CHIEF),
+        (ROLE_SERGEANT, ROLE_DETECTIVE, ROLE_CAPTAIN, ROLE_CHIEF),
     )
 
 

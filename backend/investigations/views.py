@@ -519,6 +519,22 @@ class CaseSuspectReviewView(APIView):
         suspect.reviewed_at = timezone.now()
         suspect.save(update_fields=["status", "sergeant_message", "reviewed_by", "reviewed_at"])
 
+        # Send notification to the detective who proposed the suspect
+        if decision == "approve" and suspect.proposed_by:
+            from .models import Notification
+            Notification.objects.create(
+                user=suspect.proposed_by,
+                case=case,
+                message=f"Suspect {suspect.first_name} {suspect.last_name} has been approved by Sergeant for case #{case.id}",
+            )
+        elif decision == "reject" and suspect.proposed_by:
+            from .models import Notification
+            Notification.objects.create(
+                user=suspect.proposed_by,
+                case=case,
+                message=f"Suspect {suspect.first_name} {suspect.last_name} has been rejected by Sergeant for case #{case.id}: {message}",
+            )
+
         return Response(CaseSuspectSerializer(suspect).data, status=status.HTTP_200_OK)
 
 
@@ -764,10 +780,19 @@ class MostWantedView(APIView):
             .filter(
                 status=CaseSuspectStatus.APPROVED,
             )
+            .prefetch_related("interrogation")
         )
 
         items = []
         for s in suspects:
+            # Check if captain has made final decision
+            interrogation = getattr(s, 'interrogation', None)
+            if not interrogation or interrogation.captain_final_decision is not True:
+                continue
+            
+            # For critical cases, also check chief approval
+            if s.case.crime_level == "critical" and interrogation.chief_decision is not True:
+                continue
             days, degree, ranking, reward = _compute_most_wanted_metrics(s)
             if ranking <= 0:
                 continue
