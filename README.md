@@ -53,7 +53,10 @@ VITE_API_BASE_URL=http://localhost:8000/api npm run dev
 
 ## Role setup (group names = access)
 
-Assigning a user to a **Django Group** with one of the following names is enough for that role’s access; you do not need to add Django permissions to the group.
+Default project roles are now created by a backend data migration (`accounts.0002_seed_default_roles`) with baseline permissions.
+So the Admin Panel roles list is not empty on first run.
+
+Assigning a user to a **Django Group** with one of the following names is enough for that role’s access; you do not need to add Django permissions manually.
 
 | Role (group name) | Capabilities |
 |-------------------|--------------|
@@ -66,6 +69,14 @@ Assigning a user to a **Django Group** with one of the following names is enough
 | **Judge** | Trial verdict; view case report |
 | **Admin** | Same as Chief for case/report/scene/interrogation; admin panel (staff) is separate |
 | **Workshop** | Detective board access; add/change evidence; fill forensic results |
+
+Legacy duplicate names are normalized to canonical roles:
+
+- `Administrator` -> `Admin`
+- `Police Officer` -> `Officer`
+- `Patrol Officer` -> `Officer`
+- `Sergent` -> `Sergeant`
+- `Corenary` -> `Coroner`
 
 You can still assign Django permissions to groups for finer control; the backend checks **permission OR group name** for these roles.
 

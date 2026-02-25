@@ -14,6 +14,7 @@ ROLE_CHIEF = "Chief"
 ROLE_JUDGE = "Judge"
 ROLE_ADMIN = "Admin"
 ROLE_WORKSHOP = "Workshop"
+ROLE_CORONER = "Coroner"
 
 
 def _user_group_names(user):
@@ -63,7 +64,11 @@ def user_can_cadet_review_complaint(user):
 def user_can_officer_review_complaint(user):
     if not user or not user.is_authenticated:
         return False
-    return has_perm_or_role(user, ["cases.officer_review_complaint"], (ROLE_OFFICER,))
+    return has_perm_or_role(
+        user,
+        ["cases.officer_review_complaint"],
+        (ROLE_OFFICER,),
+    )
 
 
 # ----- Cases: case visibility & report -----
@@ -273,7 +278,7 @@ def user_can_add_evidence(user):
     return has_perm_or_role(
         user,
         ["evidence.add_evidence"],
-        (ROLE_OFFICER, ROLE_DETECTIVE, ROLE_CAPTAIN, ROLE_CHIEF, ROLE_WORKSHOP),
+        (ROLE_OFFICER, ROLE_DETECTIVE, ROLE_CAPTAIN, ROLE_CHIEF, ROLE_WORKSHOP, ROLE_CORONER),
     )
 
 
@@ -281,7 +286,7 @@ def user_can_change_evidence(user):
     return has_perm_or_role(
         user,
         ["evidence.change_evidence"],
-        (ROLE_OFFICER, ROLE_DETECTIVE, ROLE_CAPTAIN, ROLE_CHIEF, ROLE_WORKSHOP),
+        (ROLE_OFFICER, ROLE_DETECTIVE, ROLE_CAPTAIN, ROLE_CHIEF, ROLE_WORKSHOP, ROLE_CORONER),
     )
 
 
@@ -297,5 +302,5 @@ def user_can_fill_forensic_results(user):
     return has_perm_or_role(
         user,
         ["evidence.fill_forensic_results"],
-        (ROLE_WORKSHOP,),
+        (ROLE_WORKSHOP, ROLE_CORONER),
     )
