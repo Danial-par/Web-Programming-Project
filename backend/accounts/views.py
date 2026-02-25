@@ -15,6 +15,7 @@ from .serializers import (
     UserSerializer,
     GroupSerializer,
 )
+from .role_bootstrap import normalize_role_name
 
 User = get_user_model()
 
@@ -41,6 +42,16 @@ class RoleViewSet(viewsets.ModelViewSet):
     queryset = Group.objects.all()
     serializer_class = GroupSerializer
     permission_classes = [IsAdminUser]
+
+    def create(self, request, *args, **kwargs):
+        raw_name = request.data.get("name")
+        role_name = normalize_role_name(raw_name)
+        if not role_name:
+            return Response({"detail": "Group name is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        group, created = Group.objects.get_or_create(name=role_name)
+        serializer = self.get_serializer(group)
+        return Response(serializer.data, status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)
 
 class UserRoleManagementView(viewsets.ViewSet):
     """
@@ -90,11 +101,11 @@ class UserRoleManagementView(viewsets.ViewSet):
         except User.DoesNotExist:
             return Response({"detail": "User not found."}, status=status.HTTP_404_NOT_FOUND)
         
-        group_name = request.data.get('name')
-        if not group_name:
+        role_name = normalize_role_name(request.data.get('name'))
+        if not role_name:
             return Response({"detail": "Group name is required."}, status=status.HTTP_400_BAD_REQUEST)
-            
-        group, created = Group.objects.get_or_create(name=group_name)
+
+        group, _ = Group.objects.get_or_create(name=role_name)
         user.groups.add(group)
         return Response(UserSerializer(user).data, status=status.HTTP_200_OK)
 
@@ -110,9 +121,12 @@ class UserRoleManagementView(viewsets.ViewSet):
         except User.DoesNotExist:
             return Response({"detail": "User not found."}, status=status.HTTP_404_NOT_FOUND)
 
-        group_name = request.data.get('name')
+        role_name = normalize_role_name(request.data.get('name'))
+        if not role_name:
+            return Response({"detail": "Group name is required."}, status=status.HTTP_400_BAD_REQUEST)
+
         try:
-            group = Group.objects.get(name=group_name)
+            group = Group.objects.get(name=role_name)
             user.groups.remove(group)
         except Group.DoesNotExist:
             pass # Or return error
