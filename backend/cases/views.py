@@ -199,7 +199,17 @@ class TrialVerdictView(APIView):
         ),
     )
     def post(self, request, case_id: int, suspect_id: int):
-        case = get_object_or_404(Case, id=case_id)
+        # Check if judge can access this case
+        from common.role_helpers import user_can_view_all_cases
+        if not user_can_view_all_cases(request.user):
+            case = get_object_or_404(Case.objects.filter(
+                models.Q(created_by=request.user) |
+                models.Q(assigned_to=request.user) |
+                models.Q(participants__user=request.user)
+            ).distinct(), id=case_id)
+        else:
+            case = get_object_or_404(Case, id=case_id)
+            
         suspect = get_object_or_404(CaseSuspect, id=suspect_id, case=case)
 
         interrogation = getattr(suspect, "interrogation", None)

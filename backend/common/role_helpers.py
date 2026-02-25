@@ -71,7 +71,7 @@ def user_can_view_all_cases(user):
     return has_perm_or_role(
         user,
         ["cases.view_all_cases"],
-        (ROLE_CHIEF, ROLE_CAPTAIN, ROLE_ADMIN),
+        (ROLE_JUDGE, ROLE_CHIEF, ROLE_CAPTAIN, ROLE_ADMIN),
     )
 
 
