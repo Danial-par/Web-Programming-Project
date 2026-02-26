@@ -37,6 +37,8 @@ export const AdminPage: React.FC = () => {
   const [assignRoleName, setAssignRoleName] = useState("");
   const [isAssigning, setIsAssigning] = useState(false);
   const [removingRole, setRemovingRole] = useState<string | null>(null);
+  const sortedRoles = [...(roles ?? [])].sort((a, b) => a.name.localeCompare(b.name));
+  const sortedUsers = [...(users ?? [])].sort((a, b) => a.id - b.id);
 
   const handleCreateRole = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -106,7 +108,7 @@ export const AdminPage: React.FC = () => {
     }
   };
 
-  const roleOptions = (roles ?? []).map((r) => ({ value: r.name, label: r.name }));
+  const roleOptions = sortedRoles.map((r) => ({ value: r.name, label: r.name }));
 
   return (
     <div className="workflow-stack">
@@ -146,18 +148,18 @@ export const AdminPage: React.FC = () => {
             <table className="ui-table">
               <thead>
                 <tr>
-                  <th>ID</th>
+                  <th>#</th>
                   <th>Name</th>
                   <th>Action</th>
                 </tr>
               </thead>
               <tbody>
-                {roles.length === 0 ? (
+                {sortedRoles.length === 0 ? (
                   <tr><td colSpan={3} className="ui-table__empty">No roles yet. Create one above.</td></tr>
                 ) : (
-                  roles.map((r) => (
+                  sortedRoles.map((r, index) => (
                     <tr key={r.id}>
-                      <td>{r.id}</td>
+                      <td>{index + 1}</td>
                       <td>{r.name}</td>
                       <td>
                         <Button
@@ -213,10 +215,10 @@ export const AdminPage: React.FC = () => {
                 </tr>
               </thead>
               <tbody>
-                {users.length === 0 ? (
+                {sortedUsers.length === 0 ? (
                   <tr><td colSpan={5} className="ui-table__empty">No users found.</td></tr>
                 ) : (
-                  users.map((u) => (
+                  sortedUsers.map((u) => (
                     <tr key={u.id}>
                       <td>{u.id}</td>
                       <td>{u.username}</td>

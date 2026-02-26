@@ -13,7 +13,6 @@ ROLE_CAPTAIN = "Captain"
 ROLE_CHIEF = "Chief"
 ROLE_JUDGE = "Judge"
 ROLE_ADMIN = "Admin"
-ROLE_WORKSHOP = "Workshop"
 ROLE_CORONER = "Coroner"
 
 
@@ -154,7 +153,7 @@ def user_can_change_detective_board(user):
     return has_perm_or_role(
         user,
         ["investigations.change_detectiveboard"],
-        (ROLE_DETECTIVE, ROLE_WORKSHOP),
+        (ROLE_DETECTIVE,),
     )
 
 
@@ -162,7 +161,7 @@ def user_can_add_board_item(user):
     return has_perm_or_role(
         user,
         ["investigations.add_boarditem"],
-        (ROLE_DETECTIVE, ROLE_WORKSHOP),
+        (ROLE_DETECTIVE,),
     )
 
 
@@ -170,7 +169,7 @@ def user_can_change_board_item(user):
     return has_perm_or_role(
         user,
         ["investigations.change_boarditem"],
-        (ROLE_DETECTIVE, ROLE_WORKSHOP),
+        (ROLE_DETECTIVE,),
     )
 
 
@@ -178,7 +177,7 @@ def user_can_delete_board_item(user):
     return has_perm_or_role(
         user,
         ["investigations.delete_boarditem"],
-        (ROLE_DETECTIVE, ROLE_WORKSHOP),
+        (ROLE_DETECTIVE,),
     )
 
 
@@ -186,7 +185,7 @@ def user_can_add_board_connection(user):
     return has_perm_or_role(
         user,
         ["investigations.add_boardconnection"],
-        (ROLE_DETECTIVE, ROLE_WORKSHOP),
+        (ROLE_DETECTIVE,),
     )
 
 
@@ -194,7 +193,7 @@ def user_can_delete_board_connection(user):
     return has_perm_or_role(
         user,
         ["investigations.delete_boardconnection"],
-        (ROLE_DETECTIVE, ROLE_WORKSHOP),
+        (ROLE_DETECTIVE,),
     )
 
 
@@ -278,7 +277,7 @@ def user_can_add_evidence(user):
     return has_perm_or_role(
         user,
         ["evidence.add_evidence"],
-        (ROLE_OFFICER, ROLE_DETECTIVE, ROLE_CAPTAIN, ROLE_CHIEF, ROLE_WORKSHOP, ROLE_CORONER),
+        (ROLE_OFFICER, ROLE_DETECTIVE, ROLE_CAPTAIN, ROLE_CHIEF, ROLE_CORONER),
     )
 
 
@@ -286,7 +285,7 @@ def user_can_change_evidence(user):
     return has_perm_or_role(
         user,
         ["evidence.change_evidence"],
-        (ROLE_OFFICER, ROLE_DETECTIVE, ROLE_CAPTAIN, ROLE_CHIEF, ROLE_WORKSHOP, ROLE_CORONER),
+        (ROLE_OFFICER, ROLE_DETECTIVE, ROLE_CAPTAIN, ROLE_CHIEF, ROLE_CORONER),
     )
 
 
@@ -302,5 +301,5 @@ def user_can_fill_forensic_results(user):
     return has_perm_or_role(
         user,
         ["evidence.fill_forensic_results"],
-        (ROLE_WORKSHOP, ROLE_CORONER),
+        (ROLE_CORONER,),
     )

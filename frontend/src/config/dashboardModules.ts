@@ -43,7 +43,7 @@ export const dashboardModules: DashboardModule[] = [
     title: "Detective Board",
     description: "Interactive board for connecting evidence and building case theories.",
     path: "/cases",
-    requiredRoles: ["Detective", "Workshop"]
+    requiredRoles: ["Detective"]
   },
   {
     id: "reports",
@@ -57,7 +57,7 @@ export const dashboardModules: DashboardModule[] = [
     title: "Admin Panel",
     description: "Manage roles, users, and system configuration.",
     path: "/admin",
-    requiredRoles: ["Admin", "Chief"]
+    requiredRoles: ["Admin"]
   },
   {
     id: "most-wanted",
