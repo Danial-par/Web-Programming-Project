@@ -20,7 +20,7 @@ INSTALLED_APPS = [
     'corsheaders',
     # Local
     'common',
-    'accounts',
+    'accounts.apps.AccountsConfig',
     'cases',
     'evidence',
     'investigations',

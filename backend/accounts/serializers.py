@@ -42,7 +42,12 @@ class UserSerializer(serializers.ModelSerializer):
         fields = ('id', 'username', 'email', 'phone', 'national_id', 'first_name', 'last_name', 'roles')
 
     def get_roles(self, obj):
-        return list(obj.groups.values_list("name", flat=True))
+        roles = list(obj.groups.values_list("name", flat=True))
+        # Backward-compatible: existing superusers should be treated as Admin
+        # even before they are saved again and signal-sync runs.
+        if obj.is_superuser and "Admin" not in roles:
+            roles.append("Admin")
+        return roles
 
 class GroupSerializer(serializers.ModelSerializer):
     class Meta:

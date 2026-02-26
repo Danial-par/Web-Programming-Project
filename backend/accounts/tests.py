@@ -174,3 +174,16 @@ class RoleBootstrapTests(APITestCase):
         self.assertTrue(Group.objects.filter(name="Officer").exists())
         self.assertTrue(Group.objects.filter(name="Sergeant").exists())
         self.assertTrue(Group.objects.filter(name="Coroner").exists())
+
+    def test_superuser_gets_admin_group_automatically(self):
+        ensure_default_roles()
+        superuser = User.objects.create_superuser(
+            username="root",
+            email="root@example.com",
+            password="pass12345",
+            phone="7000000000",
+            national_id="7000000000",
+            first_name="Root",
+            last_name="User",
+        )
+        self.assertTrue(superuser.groups.filter(name="Admin").exists())
