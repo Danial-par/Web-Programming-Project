@@ -10,6 +10,8 @@ ROLE_MERGE_MAP: dict[str, str] = {
     "patrol officer": "Officer",
     "sergent": "Sergeant",
     "corenary": "Coroner",
+    "workshop": "Coroner",
+    "worksop": "Coroner",
 }
 
 
@@ -120,17 +122,6 @@ DEFAULT_ROLE_PERMISSIONS: dict[str, set[str]] = {
         "cases.view_case_report",
         "cases.judge_verdict_trial",
     },
-    "Workshop": {
-        "investigations.change_detectiveboard",
-        "investigations.add_boarditem",
-        "investigations.change_boarditem",
-        "investigations.delete_boarditem",
-        "investigations.add_boardconnection",
-        "investigations.delete_boardconnection",
-        "evidence.add_evidence",
-        "evidence.change_evidence",
-        "evidence.fill_forensic_results",
-    },
     "Coroner": {
         "evidence.add_evidence",
         "evidence.change_evidence",
@@ -175,23 +166,35 @@ def _resolve_permissions(permission_labels: set[str]) -> list[Permission]:
     return resolved
 
 
+def _merge_group_into(source_group: Group, target_group: Group) -> None:
+    if source_group.pk == target_group.pk:
+        return
+    target_group.permissions.add(*source_group.permissions.all())
+    target_group.user_set.add(*source_group.user_set.all())
+    source_group.delete()
+
+
 def merge_duplicate_roles() -> None:
     """
     Merge legacy/duplicate role groups into canonical role groups.
     """
 
-    for source_lower, target_name in ROLE_MERGE_MAP.items():
-        source_group = Group.objects.filter(name__iexact=source_lower).first()
-        if not source_group:
-            continue
-
-        if source_group.name == target_name:
+    # 1) Merge explicit aliases into canonical roles.
+    for alias_name, target_name in ROLE_MERGE_MAP.items():
+        alias_groups = list(Group.objects.filter(name__iexact=alias_name))
+        if not alias_groups:
             continue
 
         target_group, _ = Group.objects.get_or_create(name=target_name)
-        target_group.permissions.add(*source_group.permissions.all())
-        target_group.user_set.add(*source_group.user_set.all())
-        source_group.delete()
+        for alias_group in alias_groups:
+            _merge_group_into(alias_group, target_group)
+
+    # 2) Merge case-only duplicates for all canonical roles (e.g. cadet -> Cadet).
+    for canonical_name in DEFAULT_ROLE_PERMISSIONS:
+        target_group, _ = Group.objects.get_or_create(name=canonical_name)
+        duplicates = list(Group.objects.filter(name__iexact=canonical_name).exclude(pk=target_group.pk))
+        for duplicate in duplicates:
+            _merge_group_into(duplicate, target_group)
 
 
 def ensure_default_roles() -> None:

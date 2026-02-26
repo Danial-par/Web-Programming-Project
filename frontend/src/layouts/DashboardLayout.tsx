@@ -10,6 +10,7 @@ export const DashboardLayout: React.FC = () => {
 
   const fullName = [user?.first_name, user?.last_name].filter(Boolean).join(" ") || user?.username || "Officer";
   const rolesDisplay = user?.roles && user.roles.length > 0 ? user.roles.join(", ") : "No roles assigned";
+  const isAdmin = !!user?.roles?.includes("Admin");
 
   return (
     <div className="app-shell app-shell--dashboard">
@@ -44,9 +45,11 @@ export const DashboardLayout: React.FC = () => {
           <Link to="/reports" onClick={() => setSidebarOpen(false)}>
             Reports
           </Link>
-          <Link to="/admin" onClick={() => setSidebarOpen(false)}>
-            Admin
-          </Link>
+          {isAdmin && (
+            <Link to="/admin" onClick={() => setSidebarOpen(false)}>
+              Admin
+            </Link>
+          )}
         </nav>
         <button className="app-sidebar__logout" type="button" onClick={logout}>
           Logout

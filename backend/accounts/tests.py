@@ -103,7 +103,6 @@ class RoleBootstrapTests(APITestCase):
             "Criminal",
             "Judge",
             "Coroner",
-            "Workshop",
             "Admin",
             "Officer",
         ]
@@ -154,11 +153,13 @@ class RoleBootstrapTests(APITestCase):
         legacy_police_officer = Group.objects.create(name="Police Officer")
         legacy_sergent = Group.objects.create(name="Sergent")
         legacy_corenary = Group.objects.create(name="Corenary")
+        legacy_worksop = Group.objects.create(name="Worksop")
         user = User.objects.create_user("legacy", "legacy@example.com", "pass", phone="99", national_id="99")
         legacy_admin.user_set.add(user)
         legacy_police_officer.user_set.add(user)
         legacy_sergent.user_set.add(user)
         legacy_corenary.user_set.add(user)
+        legacy_worksop.user_set.add(user)
 
         ensure_default_roles()
 
@@ -167,6 +168,8 @@ class RoleBootstrapTests(APITestCase):
         self.assertFalse(Group.objects.filter(name="Patrol Officer").exists())
         self.assertFalse(Group.objects.filter(name="Sergent").exists())
         self.assertFalse(Group.objects.filter(name="Corenary").exists())
+        self.assertFalse(Group.objects.filter(name__iexact="Workshop").exists())
+        self.assertFalse(Group.objects.filter(name__iexact="Worksop").exists())
         self.assertTrue(Group.objects.filter(name="Admin").exists())
         self.assertTrue(Group.objects.filter(name="Officer").exists())
         self.assertTrue(Group.objects.filter(name="Sergeant").exists())

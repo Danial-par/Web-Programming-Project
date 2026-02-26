@@ -39,7 +39,7 @@ class RoleViewSet(viewsets.ModelViewSet):
     CRUD for Roles (Django Groups).
     Only Admins can manage roles.
     """
-    queryset = Group.objects.all()
+    queryset = Group.objects.all().order_by("name")
     serializer_class = GroupSerializer
     permission_classes = [IsAdminUser]
 
@@ -60,7 +60,7 @@ class UserRoleManagementView(viewsets.ViewSet):
     permission_classes = [IsAdminUser]
 
     def get_queryset(self):
-        qs = User.objects.all().order_by("username")
+        qs = User.objects.all().order_by("id")
         q = self.request.query_params.get("q") or self.request.query_params.get("search")
         if q and q.strip():
             term = q.strip()

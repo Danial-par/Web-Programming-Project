@@ -17,6 +17,7 @@ import { BoardPage } from "../pages/BoardPage";
 import { ReportsPage } from "../pages/ReportsPage";
 import { AdminPage } from "../pages/AdminPage";
 import { RequireAuth } from "../auth/RequireAuth";
+import { RoleGuard } from "../auth/rbac";
 import { ComplaintDetailPage } from "../pages/ComplaintDetailPage";
 import { SceneReportsPage } from "../pages/SceneReportsPage";
 import { SceneReportCreatePage } from "../pages/SceneReportCreatePage";
@@ -54,7 +55,14 @@ export const AppRoutes: React.FC = () => {
         <Route path="/evidence/:evidenceId" element={<EvidenceDetailPage />} />
         <Route path="/board/:caseId" element={<BoardPage />} />
         <Route path="/reports" element={<ReportsPage />} />
-        <Route path="/admin" element={<AdminPage />} />
+        <Route
+          path="/admin"
+          element={
+            <RoleGuard roles={["Admin"]} fallback={<Navigate to="/dashboard" replace />}>
+              <AdminPage />
+            </RoleGuard>
+          }
+        />
       </Route>
 
       {/* Fallback */}
