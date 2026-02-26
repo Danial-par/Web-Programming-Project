@@ -198,7 +198,7 @@ class CaseViewSet(ModelViewSet):
 
 
 class TrialVerdictView(APIView):
-    """Judge creates/updates verdict for a suspect trial in a case."""
+    """Judge creates verdict for a suspect trial in a case (single submission)."""
 
     permission_classes = [IsAuthenticated, CanJudgeTrial]
 
@@ -206,10 +206,11 @@ class TrialVerdictView(APIView):
         request=TrialVerdictWriteSerializer,
         responses={200: TrialSerializer},
         description=(
-            "Create/update the judge verdict for a (case, suspect) trial.\n\n"
+            "Create the judge verdict for a (case, suspect) trial.\n\n"
             "Guards:\n"
             "- Captain decision must be present and True.\n"
             "- For CRITICAL cases, chief_decision must be True.\n"
+            "- Verdict can be submitted only once per suspect.\n"
         ),
     )
     def post(self, request, case_id: int, suspect_id: int):
@@ -241,10 +242,17 @@ class TrialVerdictView(APIView):
         serializer = TrialVerdictWriteSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        trial, created = Trial.objects.get_or_create(
+        existing_trial = Trial.objects.filter(case=case, suspect=suspect).first()
+        if existing_trial:
+            return Response(
+                {"detail": "Trial verdict has already been submitted for this suspect.", "code": "trial_verdict_already_submitted"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        trial = Trial.objects.create(
             case=case,
             suspect=suspect,
-            defaults={"created_by": request.user},
+            created_by=request.user,
         )
 
         trial.verdict = serializer.validated_data["verdict"]

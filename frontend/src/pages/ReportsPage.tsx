@@ -232,6 +232,12 @@ export const ReportsPage: React.FC = () => {
     if (!report) return;
     const draft = trialDrafts[suspect.id];
     if (!draft) return;
+    if (suspect.trials && suspect.trials.length > 0) {
+      const alreadySubmitted = "Trial verdict has already been submitted for this suspect.";
+      setTrialFormErrors((prev) => ({ ...prev, [suspect.id]: alreadySubmitted }));
+      showError(alreadySubmitted);
+      return;
+    }
 
     const prerequisitesIssue = getTrialPrerequisiteIssue(suspect, report.case.crime_level);
     if (prerequisitesIssue) {
@@ -620,7 +626,11 @@ export const ReportsPage: React.FC = () => {
                         {isJudgeRole ? (
                           <div className="reports-trial-block print-hidden">
                             <div className="workflow-kv__label">Judge Trial Verdict</div>
-                            {prerequisitesIssue ? (
+                            {trial ? (
+                              <Alert variant="info" title="Verdict submitted">
+                                Trial verdict is already recorded.
+                              </Alert>
+                            ) : prerequisitesIssue ? (
                               <Alert variant="warning" title="Prerequisites not satisfied">
                                 {prerequisitesIssue}
                               </Alert>

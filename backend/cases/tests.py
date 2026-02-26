@@ -961,3 +961,36 @@ class TrialAndReportTests(APITestCase):
 
         self.assertGreaterEqual(len(suspect["trials"]), 1)
         self.assertIn(suspect["trials"][0]["verdict"], ["guilty", "innocent"])
+
+    def test_trial_verdict_cannot_be_resubmitted_for_same_suspect(self):
+        self.client.force_authenticate(self.detective)
+        self.client.post(self.detective_url, {"detective_score": 7}, format="json")
+
+        self.client.force_authenticate(self.sergeant)
+        self.client.post(self.sergeant_url, {"sergeant_score": 6}, format="json")
+
+        self.client.force_authenticate(self.captain)
+        self.client.post(
+            self.captain_url,
+            {"captain_final_decision": True, "captain_reasoning": "Proceed"},
+            format="json",
+        )
+
+        self.client.force_authenticate(self.chief)
+        self.client.post(self.chief_url, {"chief_decision": True, "chief_message": ""}, format="json")
+
+        self.client.force_authenticate(self.judge)
+        first = self.client.post(
+            self.trial_url,
+            {"verdict": "guilty", "punishment_title": "Jail", "punishment_description": "5 years"},
+            format="json",
+        )
+        self.assertEqual(first.status_code, 200)
+
+        second = self.client.post(
+            self.trial_url,
+            {"verdict": "innocent"},
+            format="json",
+        )
+        self.assertEqual(second.status_code, 400)
+        self.assertEqual(second.data.get("code"), "trial_verdict_already_submitted")
