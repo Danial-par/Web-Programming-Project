@@ -150,6 +150,10 @@ export const CaseSuspectsPage: React.FC = () => {
   const handleReview = async (suspectId: number) => {
     const draft = reviewDrafts[suspectId];
     if (!draft) return;
+    if (draft.decision === "reject" && !draft.message.trim()) {
+      showError("Message is required when rejecting a suspect.");
+      return;
+    }
 
     try {
       setReviewSubmitting((prev) => ({ ...prev, [suspectId]: true }));
@@ -490,7 +494,9 @@ export const CaseSuspectsPage: React.FC = () => {
                           </div>
 
                           <div className="workflow-field">
-                            <label className="ui-field__label">Message (optional)</label>
+                            <label className="ui-field__label">
+                              Message {review?.decision === "reject" ? "(required)" : "(optional)"}
+                            </label>
                             <textarea
                               className="ui-textarea"
                               value={review?.message ?? ""}
@@ -511,7 +517,11 @@ export const CaseSuspectsPage: React.FC = () => {
                             <Button
                               type="button"
                               onClick={() => handleReview(suspect.id)}
-                              disabled={!review || reviewSubmitting[suspect.id]}
+                              disabled={
+                                !review
+                                || reviewSubmitting[suspect.id]
+                                || (review.decision === "reject" && !review.message.trim())
+                              }
                             >
                               {reviewSubmitting[suspect.id] ? "Submitting…" : "Submit review"}
                             </Button>

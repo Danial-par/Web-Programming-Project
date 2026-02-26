@@ -194,7 +194,7 @@ export const CaseDetailPage: React.FC = () => {
           </Link>
           <Link to={`/cases/${caseDetail.id}/suspects`}>
             <Button type="button" variant="secondary">
-              Suspects & Interrogation (Step 7)
+              Suspects & Interrogation
             </Button>
           </Link>
         </div>

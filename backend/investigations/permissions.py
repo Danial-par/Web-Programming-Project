@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from common.role_helpers import user_can_view_all_cases
+from common.role_helpers import ROLE_DETECTIVE, user_can_view_all_cases
 from cases.models import Case
 
 
@@ -14,6 +14,10 @@ def user_can_access_case(user, case: Case) -> bool:
 
     if user_can_view_all_cases(user):
         return True
+
+    # Detectives can only access their assigned case.
+    if user.groups.filter(name=ROLE_DETECTIVE).exists():
+        return case.assigned_to_id == user.id
 
     return (
         case.created_by_id == user.id

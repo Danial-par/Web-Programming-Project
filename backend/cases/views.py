@@ -16,6 +16,7 @@ from investigations.models import CaseSuspect, Interrogation
 
 from common.role_helpers import (
     ROLE_DETECTIVE,
+    ROLE_SERGEANT,
     user_can_assign_detective,
     user_can_see_all_complaints,
     user_can_view_all_cases,
@@ -61,6 +62,10 @@ from .permissions import (
 User = get_user_model()
 
 
+def _user_has_role(user, role_name: str) -> bool:
+    return bool(user and user.is_authenticated and user.groups.filter(name=role_name).exists())
+
+
 class CaseViewSet(ModelViewSet):
     permission_classes = [
         IsAuthenticated,
@@ -82,6 +87,14 @@ class CaseViewSet(ModelViewSet):
 
         if user_can_view_all_cases(user):
             return Case.objects.all()
+
+        # Sergeants can inspect case details across cases for review/interrogation flow.
+        if _user_has_role(user, ROLE_SERGEANT):
+            return Case.objects.all()
+
+        # Detectives are strictly scoped to the case assigned to them.
+        if _user_has_role(user, ROLE_DETECTIVE):
+            return Case.objects.filter(assigned_to=user).distinct()
 
         return Case.objects.filter(
             models.Q(created_by=user)
@@ -157,8 +170,9 @@ class CaseViewSet(ModelViewSet):
         permission_classes=[IsAuthenticated, CanViewCaseReport],
     )
     def report(self, request, pk=None):
-        # For privileged roles, do not rely on the default queryset scoping (avoid 404).
-        if user_can_view_case_report(request.user):
+        # Keep report visibility for judge/captain/chief/admin-style users while
+        # still keeping detective scope restricted to assigned cases.
+        if user_can_view_case_report(request.user) and not _user_has_role(request.user, ROLE_DETECTIVE):
             case = get_object_or_404(Case.objects.all(), pk=pk)
         else:
             case = get_object_or_404(self.get_queryset(), pk=pk)

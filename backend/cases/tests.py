@@ -1,4 +1,5 @@
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Group
 from django.contrib.auth.models import Permission
 from django.contrib.contenttypes.models import ContentType
 from django.db import IntegrityError
@@ -243,6 +244,81 @@ class CaseAPITests(APITestCase):
         res_detail = self.client.get(reverse("case-detail", args=[c2.id]))
         self.assertEqual(res_detail.status_code, status.HTTP_200_OK)
         self.assertEqual(res_detail.data["id"], c2.id)
+
+    def test_sergeant_role_can_retrieve_case_detail_without_participation(self):
+        case = Case.objects.create(
+            title="Sergeant View",
+            description="D",
+            crime_level=CrimeLevel.LEVEL_2,
+            created_by=self.user2,
+        )
+
+        sergeant = User.objects.create_user(
+            username="sergeant_detail",
+            email="sergeant.detail@example.com",
+            password="pass12345",
+            phone="09120009991",
+            national_id="9090000001",
+            first_name="Ser",
+            last_name="Geant",
+        )
+        sergeant_group, _ = Group.objects.get_or_create(name="Sergeant")
+        sergeant.groups.add(sergeant_group)
+
+        self.authenticate(sergeant)
+        res = self.client.get(reverse("case-detail", args=[case.id]))
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(res.data["id"], case.id)
+
+    def test_detective_role_sees_only_assigned_case(self):
+        detective = User.objects.create_user(
+            username="detective_scope",
+            email="detective.scope@example.com",
+            password="pass12345",
+            phone="09120009992",
+            national_id="9090000002",
+            first_name="Det",
+            last_name="Scope",
+        )
+        detective_group, _ = Group.objects.get_or_create(name="Detective")
+        detective.groups.add(detective_group)
+
+        assigned_case = Case.objects.create(
+            title="Assigned Case",
+            description="D",
+            crime_level=CrimeLevel.LEVEL_1,
+            created_by=self.user2,
+            assigned_to=detective,
+        )
+        participant_only_case = Case.objects.create(
+            title="Participant Case",
+            description="D",
+            crime_level=CrimeLevel.LEVEL_2,
+            created_by=self.user2,
+        )
+        created_by_detective_case = Case.objects.create(
+            title="Created By Detective",
+            description="D",
+            crime_level=CrimeLevel.LEVEL_3,
+            created_by=detective,
+        )
+        CaseParticipant.objects.create(case=participant_only_case, user=detective, is_complainant=False)
+
+        self.authenticate(detective)
+
+        res_list = self.client.get(self.list_url)
+        self.assertEqual(res_list.status_code, status.HTTP_200_OK)
+        returned_ids = {item["id"] for item in extract_list_payload(res_list)}
+        self.assertSetEqual(returned_ids, {assigned_case.id})
+
+        res_assigned = self.client.get(reverse("case-detail", args=[assigned_case.id]))
+        self.assertEqual(res_assigned.status_code, status.HTTP_200_OK)
+
+        res_participant = self.client.get(reverse("case-detail", args=[participant_only_case.id]))
+        self.assertEqual(res_participant.status_code, status.HTTP_404_NOT_FOUND)
+
+        res_created = self.client.get(reverse("case-detail", args=[created_by_detective_case.id]))
+        self.assertEqual(res_created.status_code, status.HTTP_404_NOT_FOUND)
 
     # ----------------------------
     # Model constraints

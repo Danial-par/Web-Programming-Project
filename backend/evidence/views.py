@@ -47,9 +47,11 @@ class EvidenceViewSet(ModelViewSet):
         if not user.is_authenticated:
             return qs.none()
 
-        from common.role_helpers import user_can_view_all_cases
+        from common.role_helpers import ROLE_DETECTIVE, user_can_view_all_cases
         if user_can_view_all_cases(user):
             filtered = qs
+        elif user.groups.filter(name=ROLE_DETECTIVE).exists():
+            filtered = qs.filter(case__assigned_to=user).distinct()
         else:
             filtered = qs.filter(
                 models.Q(case__created_by=user)

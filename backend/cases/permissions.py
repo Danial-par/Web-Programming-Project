@@ -1,6 +1,8 @@
 from rest_framework.permissions import BasePermission, SAFE_METHODS
 
 from common.role_helpers import (
+    ROLE_DETECTIVE,
+    ROLE_SERGEANT,
     user_can_add_case,
     user_can_approve_scene_report,
     user_can_cadet_review_complaint,
@@ -13,15 +15,28 @@ from common.role_helpers import (
 )
 from .models import Complaint, ComplaintComplainant, SceneReport
 
+
+def _user_has_role(user, role_name: str) -> bool:
+    return bool(user and user.is_authenticated and user.groups.filter(name=role_name).exists())
+
+
 class CanViewCase(BasePermission):
     """
-    - Users with view_all_cases (or Chief/Captain/Admin role) can see everything
+    - Users with global case visibility can see everything
+    - Sergeant can inspect case details for workflow reasons
+    - Detective can see only the case assigned to them
     - Others can only see cases they are related to
     """
 
     def has_object_permission(self, request, view, obj):
         if user_can_view_all_cases(request.user):
             return True
+
+        if _user_has_role(request.user, ROLE_SERGEANT):
+            return True
+
+        if _user_has_role(request.user, ROLE_DETECTIVE):
+            return obj.assigned_to_id == request.user.id
 
         return (
             obj.created_by == request.user
