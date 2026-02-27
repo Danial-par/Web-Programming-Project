@@ -7,6 +7,7 @@ from django.conf import settings
 from django.conf.urls.static import static
 
 from cases.views import payment_simulate_view
+from investigations.views import zarinpal_callback_view
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -27,6 +28,7 @@ urlpatterns = [
 
     # Payment simulation (HTML)
     path("payments/simulate/<int:payment_id>/", payment_simulate_view, name="payment-simulate"),
+    path("payments/zarinpal/callback/", zarinpal_callback_view, name="zarinpal-callback"),
 ]
 
 if settings.DEBUG:

@@ -86,6 +86,13 @@ export const dashboardModules: DashboardModule[] = [
     description: "Public list of high-priority suspects with reward information.",
     path: "/most-wanted",
     requiredRoles: []
+  },
+  {
+    id: "bail-fine",
+    title: "Bail & Fine",
+    description: "Lookup suspect release info and start bail/fine payments.",
+    path: "/bail-fine",
+    requiredRoles: []
   }
 ];
 

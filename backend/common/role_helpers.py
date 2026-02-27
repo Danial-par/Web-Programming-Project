@@ -272,6 +272,14 @@ def user_can_reward_lookup(user):
     )
 
 
+def user_can_set_bail_fine(user):
+    return has_perm_or_role(
+        user,
+        ["investigations.set_bail_fine"],
+        (ROLE_SERGEANT,),
+    )
+
+
 # ----- Evidence -----
 def user_can_add_evidence(user):
     return has_perm_or_role(

@@ -121,6 +121,15 @@ export interface CaseSuspect {
   reviewed_by: number | null;
   reviewed_by_username: string;
   reviewed_at: string | null;
+  custody_status?: "detained" | "released" | string;
+  bail_amount?: number | null;
+  bail_set_by?: number | null;
+  bail_set_at?: string | null;
+  fine_amount?: number | null;
+  fine_set_by?: number | null;
+  fine_set_at?: string | null;
+  released_at?: string | null;
+  released_by?: number | null;
 }
 
 export interface CaseSuspectProposePayload {
@@ -148,6 +157,88 @@ export function reviewSuspect(
   return apiRequest<CaseSuspect>(endpoints.suspectReview(caseId, suspectId), {
     method: "POST",
     body: JSON.stringify(payload)
+  });
+}
+
+// -----------------------------------------------------------------------------
+// Bail / Fine
+// -----------------------------------------------------------------------------
+
+export interface ReleasePayment {
+  id: number;
+  suspect: number;
+  case: number;
+  payer: number | null;
+  payment_type: "bail" | "fine" | string;
+  amount: number;
+  status: "pending" | "paid" | "failed" | string;
+  authority: string;
+  ref_id: string;
+  gateway: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ReleaseInfo {
+  suspect_id: number;
+  case_id: number;
+  custody_status: "detained" | "released" | string;
+  bail_amount: number | null;
+  fine_amount: number | null;
+  bail_eligible: boolean;
+  fine_eligible: boolean;
+  bail_assigned: boolean;
+  fine_assigned: boolean;
+  last_payment: ReleasePayment | null;
+}
+
+export interface ReleasePaymentStart {
+  payment_url: string;
+  authority: string;
+  payment_id: number;
+}
+
+export function getReleaseInfo(caseId: number | string, suspectId: number | string): Promise<ReleaseInfo> {
+  return apiRequest<ReleaseInfo>(endpoints.suspectReleaseInfo(caseId, suspectId), { method: "GET" });
+}
+
+export function assignBailAmount(
+  caseId: number | string,
+  suspectId: number | string,
+  amount: number
+): Promise<CaseSuspect> {
+  return apiRequest<CaseSuspect>(endpoints.suspectBailAssign(caseId, suspectId), {
+    method: "POST",
+    body: JSON.stringify({ amount })
+  });
+}
+
+export function assignFineAmount(
+  caseId: number | string,
+  suspectId: number | string,
+  amount: number
+): Promise<CaseSuspect> {
+  return apiRequest<CaseSuspect>(endpoints.suspectFineAssign(caseId, suspectId), {
+    method: "POST",
+    body: JSON.stringify({ amount })
+  });
+}
+
+export function startBailPayment(
+  caseId: number | string,
+  suspectId: number | string
+): Promise<ReleasePaymentStart> {
+  return apiRequest<ReleasePaymentStart>(endpoints.suspectBailPay(caseId, suspectId), {
+    method: "POST"
+  });
+}
+
+export function startFinePayment(
+  caseId: number | string,
+  suspectId: number | string
+): Promise<ReleasePaymentStart> {
+  return apiRequest<ReleasePaymentStart>(endpoints.suspectFinePay(caseId, suspectId), {
+    method: "POST"
   });
 }
 

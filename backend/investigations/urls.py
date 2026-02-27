@@ -20,6 +20,11 @@ from .views import (
     TipDetectiveReviewView,
     TipOfficerReviewView,
     TipViewSet,
+    SuspectReleaseInfoView,
+    SuspectBailAssignView,
+    SuspectFineAssignView,
+    SuspectBailPaymentStartView,
+    SuspectFinePaymentStartView,
 )
 
 
@@ -93,4 +98,31 @@ urlpatterns = [
     path("tips/<int:tip_id>/officer-review/", TipOfficerReviewView.as_view(), name="tip-officer-review"),
     path("tips/<int:tip_id>/detective-review/", TipDetectiveReviewView.as_view(), name="tip-detective-review"),
     path("rewards/lookup/", RewardLookupView.as_view(), name="reward-lookup"),
+
+    # Bail / Fine payments
+    path(
+        "cases/<int:case_id>/suspects/<int:suspect_id>/release-info/",
+        SuspectReleaseInfoView.as_view(),
+        name="suspect-release-info",
+    ),
+    path(
+        "cases/<int:case_id>/suspects/<int:suspect_id>/bail/assign/",
+        SuspectBailAssignView.as_view(),
+        name="suspect-bail-assign",
+    ),
+    path(
+        "cases/<int:case_id>/suspects/<int:suspect_id>/fine/assign/",
+        SuspectFineAssignView.as_view(),
+        name="suspect-fine-assign",
+    ),
+    path(
+        "cases/<int:case_id>/suspects/<int:suspect_id>/bail/pay/",
+        SuspectBailPaymentStartView.as_view(),
+        name="suspect-bail-pay",
+    ),
+    path(
+        "cases/<int:case_id>/suspects/<int:suspect_id>/fine/pay/",
+        SuspectFinePaymentStartView.as_view(),
+        name="suspect-fine-pay",
+    ),
 ] + router.urls

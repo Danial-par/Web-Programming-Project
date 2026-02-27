@@ -157,6 +157,11 @@ class CaseSuspectStatus(models.TextChoices):
     REJECTED = "rejected", "Rejected"
 
 
+class CustodyStatus(models.TextChoices):
+    DETAINED = "detained", "Detained"
+    RELEASED = "released", "Released"
+
+
 class CaseSuspect(models.Model):
     """A suspect proposed by a detective and reviewed by a sergeant."""
 
@@ -200,11 +205,45 @@ class CaseSuspect(models.Model):
     )
     reviewed_at = models.DateTimeField(null=True, blank=True)
 
+    # Bail/Fine workflow
+    custody_status = models.CharField(
+        max_length=16,
+        choices=CustodyStatus.choices,
+        default=CustodyStatus.DETAINED,
+    )
+    bail_amount = models.BigIntegerField(null=True, blank=True)
+    bail_set_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="suspects_bail_set",
+    )
+    bail_set_at = models.DateTimeField(null=True, blank=True)
+    fine_amount = models.BigIntegerField(null=True, blank=True)
+    fine_set_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="suspects_fine_set",
+    )
+    fine_set_at = models.DateTimeField(null=True, blank=True)
+    released_at = models.DateTimeField(null=True, blank=True)
+    released_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="suspects_released",
+    )
+
     class Meta:
         ordering = ["-proposed_at"]
         permissions = [
             ("propose_case_suspect", "Can propose a suspect for a case"),
             ("review_case_suspect", "Can review a proposed suspect for a case"),
+            ("set_bail_fine", "Can set bail/fine amounts for a suspect"),
         ]
 
     def __str__(self) -> str:
@@ -377,3 +416,55 @@ class Reward(models.Model):
 
     def __str__(self) -> str:
         return f"Reward(tip_id={self.tip_id}, code={self.reward_code})"
+
+
+class ReleasePaymentStatus(models.TextChoices):
+    PENDING = "pending", "Pending"
+    PAID = "paid", "Paid"
+    FAILED = "failed", "Failed"
+
+
+class ReleasePaymentType(models.TextChoices):
+    BAIL = "bail", "Bail"
+    FINE = "fine", "Fine"
+
+
+class ReleasePayment(models.Model):
+    """Payment record for bail/fine release flow."""
+
+    suspect = models.ForeignKey(
+        CaseSuspect,
+        on_delete=models.CASCADE,
+        related_name="release_payments",
+    )
+    case = models.ForeignKey(
+        "cases.Case",
+        on_delete=models.CASCADE,
+        related_name="release_payments",
+    )
+    payer = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="release_payments",
+    )
+    payment_type = models.CharField(max_length=16, choices=ReleasePaymentType.choices)
+    amount = models.BigIntegerField()
+    status = models.CharField(
+        max_length=16,
+        choices=ReleasePaymentStatus.choices,
+        default=ReleasePaymentStatus.PENDING,
+    )
+    authority = models.CharField(max_length=64, blank=True, default="")
+    ref_id = models.CharField(max_length=64, blank=True, default="")
+    gateway = models.CharField(max_length=32, blank=True, default="zarinpal")
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self) -> str:
+        return f"ReleasePayment(id={self.id}, type={self.payment_type}, status={self.status})"

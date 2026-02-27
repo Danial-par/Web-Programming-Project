@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 from django.utils import timezone
+from django.conf import settings
 from django.db import transaction
-from django.shortcuts import get_object_or_404
+from django.shortcuts import get_object_or_404, render
 from rest_framework import status, viewsets
 from rest_framework.exceptions import NotFound
 from rest_framework.permissions import IsAuthenticated
@@ -11,18 +12,23 @@ from rest_framework.views import APIView
 
 from drf_spectacular.utils import OpenApiExample, OpenApiParameter, extend_schema
 
-from cases.models import Case
-from cases.constants import CaseStatus
-from cases.constants import CRIME_LEVEL_DEGREE
+from common.zarinpal import ZarinpalError, request_payment, verify_payment
+from cases.models import Case, Trial
+from cases.constants import CaseStatus, CrimeLevel, CRIME_LEVEL_DEGREE
+from cases.models import TrialVerdict
 
 from .models import (
     BoardConnection,
     BoardItem,
     CaseSuspect,
     CaseSuspectStatus,
+    CustodyStatus,
     DetectiveBoard,
     Interrogation,
     Notification,
+    ReleasePayment,
+    ReleasePaymentStatus,
+    ReleasePaymentType,
     Reward,
     Tip,
     TipStatus,
@@ -45,8 +51,12 @@ from .serializers import (
     InterrogationSerializer,
     MostWantedSuspectSerializer,
     NotificationSerializer,
+    BailFineAssignSerializer,
     RewardLookupSerializer,
     RewardSerializer,
+    ReleaseInfoSerializer,
+    ReleasePaymentSerializer,
+    ReleasePaymentStartSerializer,
     SergeantInterrogationSubmitSerializer,
     TipCreateSerializer,
     TipDetectiveReviewSerializer,
@@ -78,6 +88,14 @@ def _get_suspect_or_404(case: Case, suspect_id: int) -> CaseSuspect:
 def _get_or_create_interrogation(suspect: CaseSuspect) -> Interrogation:
     obj, _ = Interrogation.objects.get_or_create(suspect=suspect)
     return obj
+
+
+def _is_case_level_2_or_3(case: Case) -> bool:
+    return case.crime_level in {CrimeLevel.LEVEL_2, CrimeLevel.LEVEL_3}
+
+
+def _has_guilty_verdict(case: Case, suspect: CaseSuspect) -> bool:
+    return Trial.objects.filter(case=case, suspect=suspect, verdict=TrialVerdict.GUILTY).exists()
 
 
 class CaseBoardView(APIView):
@@ -1121,3 +1139,331 @@ class RewardLookupView(APIView):
             "last_name": getattr(reward.tip.user, "last_name", ""),
         }
         return Response(payload, status=status.HTTP_200_OK)
+
+
+# -----------------------------------------------------------------------------
+# Bail / Fine payments (Zarinpal)
+# -----------------------------------------------------------------------------
+
+
+class SuspectReleaseInfoView(APIView):
+    """Return bail/fine eligibility + amounts for a suspect."""
+
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        responses={200: ReleaseInfoSerializer},
+        description="Get release eligibility and assigned amounts for a suspect.",
+    )
+    def get(self, request, case_id: int, suspect_id: int):
+        case = _get_case_or_404_for_user(request.user, case_id)
+        suspect = _get_suspect_or_404(case, suspect_id)
+
+        bail_eligible = (
+            suspect.status == CaseSuspectStatus.APPROVED
+            and _is_case_level_2_or_3(case)
+            and suspect.custody_status != CustodyStatus.RELEASED
+        )
+        fine_eligible = (
+            case.crime_level == CrimeLevel.LEVEL_3
+            and _has_guilty_verdict(case, suspect)
+            and suspect.custody_status != CustodyStatus.RELEASED
+        )
+
+        last_payment = ReleasePayment.objects.filter(suspect=suspect).first()
+
+        payload = {
+            "suspect_id": suspect.id,
+            "case_id": case.id,
+            "custody_status": suspect.custody_status,
+            "bail_amount": suspect.bail_amount,
+            "fine_amount": suspect.fine_amount,
+            "bail_eligible": bail_eligible,
+            "fine_eligible": fine_eligible,
+            "bail_assigned": bool(suspect.bail_amount),
+            "fine_assigned": bool(suspect.fine_amount),
+            "last_payment": ReleasePaymentSerializer(last_payment).data if last_payment else None,
+        }
+
+        return Response(payload, status=status.HTTP_200_OK)
+
+
+class SuspectBailAssignView(APIView):
+    """Sergeant sets bail amount for eligible suspects (crime level 2/3)."""
+
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        request=BailFineAssignSerializer,
+        responses={200: CaseSuspectSerializer},
+        description="Assign bail amount (sergeant only).",
+    )
+    def post(self, request, case_id: int, suspect_id: int):
+        from common.role_helpers import user_can_set_bail_fine
+        if not user_can_set_bail_fine(request.user):
+            return Response(
+                {"detail": "Missing permission: investigations.set_bail_fine", "code": "forbidden"},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        case = _get_case_or_404_for_user(request.user, case_id)
+        suspect = _get_suspect_or_404(case, suspect_id)
+
+        if suspect.status != CaseSuspectStatus.APPROVED or not _is_case_level_2_or_3(case):
+            return Response(
+                {"detail": "Bail is only allowed for approved suspects in level 2/3 cases.", "code": "invalid_state"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        serializer = BailFineAssignSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        suspect.bail_amount = serializer.validated_data["amount"]
+        suspect.bail_set_by = request.user
+        suspect.bail_set_at = timezone.now()
+        suspect.save(update_fields=["bail_amount", "bail_set_by", "bail_set_at", "updated_at"])
+
+        return Response(CaseSuspectSerializer(suspect).data, status=status.HTTP_200_OK)
+
+
+class SuspectFineAssignView(APIView):
+    """Sergeant sets fine amount for convicted level-3 criminals."""
+
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        request=BailFineAssignSerializer,
+        responses={200: CaseSuspectSerializer},
+        description="Assign fine amount (sergeant only).",
+    )
+    def post(self, request, case_id: int, suspect_id: int):
+        from common.role_helpers import user_can_set_bail_fine
+        if not user_can_set_bail_fine(request.user):
+            return Response(
+                {"detail": "Missing permission: investigations.set_bail_fine", "code": "forbidden"},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        case = _get_case_or_404_for_user(request.user, case_id)
+        suspect = _get_suspect_or_404(case, suspect_id)
+
+        if case.crime_level != CrimeLevel.LEVEL_3 or not _has_guilty_verdict(case, suspect):
+            return Response(
+                {"detail": "Fine is only allowed for guilty level 3 suspects.", "code": "invalid_state"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        serializer = BailFineAssignSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        suspect.fine_amount = serializer.validated_data["amount"]
+        suspect.fine_set_by = request.user
+        suspect.fine_set_at = timezone.now()
+        suspect.save(update_fields=["fine_amount", "fine_set_by", "fine_set_at", "updated_at"])
+
+        return Response(CaseSuspectSerializer(suspect).data, status=status.HTTP_200_OK)
+
+
+class SuspectBailPaymentStartView(APIView):
+    """Start bail payment via Zarinpal."""
+
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        responses={200: ReleasePaymentStartSerializer},
+        description="Create a Zarinpal payment for bail and return the payment URL.",
+    )
+    def post(self, request, case_id: int, suspect_id: int):
+        case = _get_case_or_404_for_user(request.user, case_id)
+        suspect = _get_suspect_or_404(case, suspect_id)
+
+        if suspect.status != CaseSuspectStatus.APPROVED or not _is_case_level_2_or_3(case):
+            return Response(
+                {"detail": "Bail payment not allowed for this suspect.", "code": "invalid_state"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if not suspect.bail_amount:
+            return Response(
+                {"detail": "Bail amount has not been assigned.", "code": "missing_amount"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if suspect.custody_status == CustodyStatus.RELEASED:
+            return Response(
+                {"detail": "Suspect is already released.", "code": "already_released"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        payment = ReleasePayment.objects.create(
+            suspect=suspect,
+            case=case,
+            payer=request.user,
+            payment_type=ReleasePaymentType.BAIL,
+            amount=suspect.bail_amount,
+            status=ReleasePaymentStatus.PENDING,
+        )
+
+        callback_url = request.build_absolute_uri("/payments/zarinpal/callback/") + f"?payment_id={payment.id}"
+
+        try:
+            authority, payment_url = request_payment(
+                merchant_id=settings.ZARINPAL_MERCHANT_ID,
+                amount=payment.amount,
+                description=f"{settings.ZARINPAL_PAYMENT_DESCRIPTION} (Bail)",
+                callback_url=callback_url,
+                sandbox=settings.ZARINPAL_SANDBOX,
+            )
+        except ZarinpalError as exc:
+            payment.status = ReleasePaymentStatus.FAILED
+            payment.save(update_fields=["status", "updated_at"])
+            return Response(
+                {"detail": str(exc), "code": "gateway_error"},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+
+        payment.authority = authority
+        payment.save(update_fields=["authority", "updated_at"])
+
+        return Response(
+            {"payment_url": payment_url, "authority": authority, "payment_id": payment.id},
+            status=status.HTTP_200_OK,
+        )
+
+
+class SuspectFinePaymentStartView(APIView):
+    """Start fine payment via Zarinpal."""
+
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        responses={200: ReleasePaymentStartSerializer},
+        description="Create a Zarinpal payment for fine and return the payment URL.",
+    )
+    def post(self, request, case_id: int, suspect_id: int):
+        case = _get_case_or_404_for_user(request.user, case_id)
+        suspect = _get_suspect_or_404(case, suspect_id)
+
+        if case.crime_level != CrimeLevel.LEVEL_3 or not _has_guilty_verdict(case, suspect):
+            return Response(
+                {"detail": "Fine payment not allowed for this suspect.", "code": "invalid_state"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if not suspect.fine_amount:
+            return Response(
+                {"detail": "Fine amount has not been assigned.", "code": "missing_amount"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if suspect.custody_status == CustodyStatus.RELEASED:
+            return Response(
+                {"detail": "Suspect is already released.", "code": "already_released"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        payment = ReleasePayment.objects.create(
+            suspect=suspect,
+            case=case,
+            payer=request.user,
+            payment_type=ReleasePaymentType.FINE,
+            amount=suspect.fine_amount,
+            status=ReleasePaymentStatus.PENDING,
+        )
+
+        callback_url = request.build_absolute_uri("/payments/zarinpal/callback/") + f"?payment_id={payment.id}"
+
+        try:
+            authority, payment_url = request_payment(
+                merchant_id=settings.ZARINPAL_MERCHANT_ID,
+                amount=payment.amount,
+                description=f"{settings.ZARINPAL_PAYMENT_DESCRIPTION} (Fine)",
+                callback_url=callback_url,
+                sandbox=settings.ZARINPAL_SANDBOX,
+            )
+        except ZarinpalError as exc:
+            payment.status = ReleasePaymentStatus.FAILED
+            payment.save(update_fields=["status", "updated_at"])
+            return Response(
+                {"detail": str(exc), "code": "gateway_error"},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+
+        payment.authority = authority
+        payment.save(update_fields=["authority", "updated_at"])
+
+        return Response(
+            {"payment_url": payment_url, "authority": authority, "payment_id": payment.id},
+            status=status.HTTP_200_OK,
+        )
+
+
+def zarinpal_callback_view(request):
+    """Handle Zarinpal redirect, verify payment, and release suspect on success."""
+
+    authority = request.GET.get("Authority", "")
+    status_param = (request.GET.get("Status") or "").lower()
+    payment_id = request.GET.get("payment_id")
+
+    payment = None
+    if payment_id:
+        payment = ReleasePayment.objects.filter(id=payment_id).select_related("suspect", "case").first()
+    if payment is None and authority:
+        payment = ReleasePayment.objects.filter(authority=authority).select_related("suspect", "case").first()
+
+    if payment is None:
+        return render(
+            request,
+            "payments/zarinpal_result.html",
+            {"success": False, "message": "Payment record not found."},
+            status=404,
+        )
+
+    if status_param != "ok":
+        payment.status = ReleasePaymentStatus.FAILED
+        payment.save(update_fields=["status", "updated_at"])
+        return render(
+            request,
+            "payments/zarinpal_result.html",
+            {"success": False, "message": "Payment canceled by user.", "payment": payment},
+        )
+
+    try:
+        code, ref_id = verify_payment(
+            merchant_id=settings.ZARINPAL_MERCHANT_ID,
+            amount=payment.amount,
+            authority=authority or payment.authority,
+            sandbox=settings.ZARINPAL_SANDBOX,
+        )
+    except ZarinpalError as exc:
+        payment.status = ReleasePaymentStatus.FAILED
+        payment.save(update_fields=["status", "updated_at"])
+        return render(
+            request,
+            "payments/zarinpal_result.html",
+            {"success": False, "message": str(exc), "payment": payment},
+            status=502,
+        )
+
+    if code in {100, 101}:
+        payment.status = ReleasePaymentStatus.PAID
+        payment.ref_id = ref_id
+        payment.authority = authority or payment.authority
+        payment.save(update_fields=["status", "ref_id", "authority", "updated_at"])
+
+        suspect = payment.suspect
+        if suspect.custody_status != CustodyStatus.RELEASED:
+            suspect.custody_status = CustodyStatus.RELEASED
+            suspect.released_at = timezone.now()
+            suspect.released_by = payment.payer
+            suspect.save(update_fields=["custody_status", "released_at", "released_by", "updated_at"])
+
+        return render(
+            request,
+            "payments/zarinpal_result.html",
+            {"success": True, "payment": payment, "message": "Payment verified and suspect released."},
+        )
+
+    payment.status = ReleasePaymentStatus.FAILED
+    payment.save(update_fields=["status", "updated_at"])
+    return render(
+        request,
+        "payments/zarinpal_result.html",
+        {"success": False, "payment": payment, "message": f"Verification failed (code={code})."},
+    )

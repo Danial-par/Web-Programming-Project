@@ -13,8 +13,12 @@ from .models import (
     DetectiveBoard,
     CaseSuspect,
     CaseSuspectStatus,
+    CustodyStatus,
     Interrogation,
     Notification,
+    ReleasePayment,
+    ReleasePaymentStatus,
+    ReleasePaymentType,
     Reward,
     Tip,
     TipStatus,
@@ -245,6 +249,15 @@ class CaseSuspectSerializer(serializers.ModelSerializer):
             "reviewed_by",
             "reviewed_by_username",
             "reviewed_at",
+            "custody_status",
+            "bail_amount",
+            "bail_set_by",
+            "bail_set_at",
+            "fine_amount",
+            "fine_set_by",
+            "fine_set_at",
+            "released_at",
+            "released_by",
         ]
         read_only_fields = fields
 
@@ -310,6 +323,49 @@ class InterrogationSerializer(serializers.ModelSerializer):
             "updated_at",
         ]
         read_only_fields = fields
+
+
+class BailFineAssignSerializer(serializers.Serializer):
+    amount = serializers.IntegerField(min_value=1)
+
+
+class ReleasePaymentSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ReleasePayment
+        fields = [
+            "id",
+            "suspect",
+            "case",
+            "payer",
+            "payment_type",
+            "amount",
+            "status",
+            "authority",
+            "ref_id",
+            "gateway",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = fields
+
+
+class ReleasePaymentStartSerializer(serializers.Serializer):
+    payment_url = serializers.CharField()
+    authority = serializers.CharField()
+    payment_id = serializers.IntegerField()
+
+
+class ReleaseInfoSerializer(serializers.Serializer):
+    suspect_id = serializers.IntegerField()
+    case_id = serializers.IntegerField()
+    custody_status = serializers.ChoiceField(choices=CustodyStatus.choices)
+    bail_amount = serializers.IntegerField(allow_null=True)
+    fine_amount = serializers.IntegerField(allow_null=True)
+    bail_eligible = serializers.BooleanField()
+    fine_eligible = serializers.BooleanField()
+    bail_assigned = serializers.BooleanField()
+    fine_assigned = serializers.BooleanField()
+    last_payment = ReleasePaymentSerializer(allow_null=True)
 
 
 class DetectiveInterrogationSubmitSerializer(serializers.Serializer):

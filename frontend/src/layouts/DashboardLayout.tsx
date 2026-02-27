@@ -49,6 +49,9 @@ export const DashboardLayout: React.FC = () => {
           <Link to="/tips" onClick={() => setSidebarOpen(false)}>
             Tips / Rewards
           </Link>
+          <Link to="/bail-fine" onClick={() => setSidebarOpen(false)}>
+            Bail & Fine
+          </Link>
           <Link to="/reports" onClick={() => setSidebarOpen(false)}>
             Reports
           </Link>

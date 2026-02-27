@@ -43,6 +43,16 @@ export const endpoints = {
   suspectPropose: (caseId: number | string) => `/cases/${caseId}/suspects/propose/`,
   suspectReview: (caseId: number | string, suspectId: number | string) =>
     `/cases/${caseId}/suspects/${suspectId}/review/`,
+  suspectReleaseInfo: (caseId: number | string, suspectId: number | string) =>
+    `/cases/${caseId}/suspects/${suspectId}/release-info/`,
+  suspectBailAssign: (caseId: number | string, suspectId: number | string) =>
+    `/cases/${caseId}/suspects/${suspectId}/bail/assign/`,
+  suspectFineAssign: (caseId: number | string, suspectId: number | string) =>
+    `/cases/${caseId}/suspects/${suspectId}/fine/assign/`,
+  suspectBailPay: (caseId: number | string, suspectId: number | string) =>
+    `/cases/${caseId}/suspects/${suspectId}/bail/pay/`,
+  suspectFinePay: (caseId: number | string, suspectId: number | string) =>
+    `/cases/${caseId}/suspects/${suspectId}/fine/pay/`,
 
   // Interrogation
   suspectInterrogationDetective: (caseId: number | string, suspectId: number | string) =>

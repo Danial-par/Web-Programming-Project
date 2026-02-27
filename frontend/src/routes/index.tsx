@@ -25,6 +25,7 @@ import { SceneReportDetailPage } from "../pages/SceneReportDetailPage";
 import { TipsPage } from "../pages/TipsPage";
 import { RewardLookupPage } from "../pages/RewardLookupPage";
 import { TipsReviewPage } from "../pages/TipsReviewPage";
+import { BailFinePage } from "../pages/BailFinePage";
 
 export const AppRoutes: React.FC = () => {
   return (
@@ -51,6 +52,7 @@ export const AppRoutes: React.FC = () => {
         <Route path="/cases/:caseId/suspects" element={<CaseSuspectsPage />} />
         <Route path="/complaints" element={<ComplaintsPage />} />
         <Route path="/tips" element={<TipsPage />} />
+        <Route path="/bail-fine" element={<BailFinePage />} />
         <Route
           path="/rewards/lookup"
           element={

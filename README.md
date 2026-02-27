@@ -86,3 +86,14 @@ npm run test:run    # single run
 ```
 
 Tests use Vitest and React Testing Library. They cover login form validation, protected route redirect, home page stats (mocked fetch), most-wanted list (mocked fetch), and dashboard module visibility by role.
+
+## Bail/Fine payments (Zarinpal sandbox)
+
+Environment variables (see `backend/.env.example`):
+- `ZARINPAL_MERCHANT_ID` (use any UUID string in sandbox)
+- `ZARINPAL_SANDBOX=True`
+
+Flow:
+1. Sergeant assigns bail/fine amount for a suspect (level 2/3 bail, level 3 guilty fine).
+2. User starts payment from **Bail & Fine** page (`/bail-fine`).
+3. Zarinpal redirects to `/payments/zarinpal/callback/` which verifies payment and releases the suspect.

@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Payment Result</title>
+    <style>
+      body { font-family: Arial, sans-serif; background: #0f172a; color: #e2e8f0; margin: 0; padding: 0; }
+      .wrap { max-width: 720px; margin: 48px auto; padding: 24px; background: #111827; border-radius: 12px; }
+      .badge { display: inline-block; padding: 6px 10px; border-radius: 999px; font-size: 12px; background: #1f2937; }
+      .status { font-size: 20px; font-weight: 700; margin: 12px 0; }
+      .status.success { color: #22c55e; }
+      .status.fail { color: #f97316; }
+      .meta { margin-top: 16px; font-size: 14px; color: #94a3b8; }
+      .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <div class="badge">Zarinpal Sandbox</div>
+      {% if success %}
+        <div class="status success">Payment succeeded</div>
+        <p>{{ message }}</p>
+      {% else %}
+        <div class="status fail">Payment failed</div>
+        <p>{{ message }}</p>
+      {% endif %}
+
+      {% if payment %}
+        <div class="meta">
+          Payment ID: <span class="mono">{{ payment.id }}</span><br />
+          Status: <span class="mono">{{ payment.status }}</span><br />
+          Amount: <span class="mono">{{ payment.amount }}</span> Rial<br />
+          Authority: <span class="mono">{{ payment.authority }}</span><br />
+          Ref ID: <span class="mono">{{ payment.ref_id }}</span>
+        </div>
+      {% endif %}
+    </div>
+  </body>
+</html>

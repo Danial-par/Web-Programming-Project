@@ -101,6 +101,11 @@ SPECTACULAR_SETTINGS = {
 # CORS
 CORS_ALLOW_ALL_ORIGINS = os.environ.get('CORS_ALLOW_ALL_ORIGINS', 'False') == 'True'
 
+# Zarinpal (payment gateway)
+ZARINPAL_MERCHANT_ID = os.environ.get("ZARINPAL_MERCHANT_ID", "test-merchant")
+ZARINPAL_SANDBOX = os.environ.get("ZARINPAL_SANDBOX", "true").lower() in {"1", "true", "yes"}
+ZARINPAL_PAYMENT_DESCRIPTION = os.environ.get("ZARINPAL_PAYMENT_DESCRIPTION", "Bail/Fine payment")
+
 from datetime import timedelta
 SIMPLE_JWT = {
     'ACCESS_TOKEN_LIFETIME': timedelta(minutes=60),
