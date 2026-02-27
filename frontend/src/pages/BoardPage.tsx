@@ -28,6 +28,7 @@ const CANVAS_WIDTH = 2000;
 const CANVAS_HEIGHT = 1200;
 const ITEM_WIDTH = 240;
 const ITEM_HEIGHT = 140;
+const EVIDENCE_LABEL_MAX = 52;
 
 function nextItemPosition(items: BoardItem[]) {
   const baseX = 60;
@@ -39,6 +40,13 @@ function nextItemPosition(items: BoardItem[]) {
     x: (baseX + (idx * stepX) % 720) % (CANVAS_WIDTH - 260),
     y: (baseY + Math.floor((idx * stepX) / 720) * stepY) % (CANVAS_HEIGHT - 170)
   };
+}
+
+function shorten(text: string, max = EVIDENCE_LABEL_MAX) {
+  const value = (text || "").trim();
+  if (!value) return "";
+  if (value.length <= max) return value;
+  return `${value.slice(0, max - 1)}…`;
 }
 
 export const BoardPage: React.FC = () => {
@@ -102,7 +110,7 @@ export const BoardPage: React.FC = () => {
     if (!evidence) return [];
     return evidence.map((e) => ({
       value: String(e.id),
-      label: `#${e.id} · ${e.title} (${e.type})`
+      label: `#${e.id} · ${shorten(e.title)}`
     }));
   }, [evidence]);
 

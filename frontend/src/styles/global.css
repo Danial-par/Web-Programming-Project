@@ -611,9 +611,10 @@ a {
 
 .suspect-card__reward {
   display: flex;
-  justify-content: space-between;
+  justify-content: flex-start;
   align-items: baseline;
   gap: 0.75rem;
+  flex-wrap: wrap;
   margin-top: 0.85rem;
 }
 
@@ -1072,11 +1073,11 @@ a {
 
 .board-shell {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 360px;
-  gap: 1rem;
+  grid-template-columns: minmax(0, 1fr) minmax(400px, 440px);
+  gap: 1.1rem;
 }
 
-@media (max-width: 980px) {
+@media (max-width: 900px) {
   .board-shell {
     grid-template-columns: 1fr;
   }
@@ -1110,9 +1111,10 @@ a {
   position: sticky;
   top: 88px;
   align-self: start;
+  min-width: 0;
 }
 
-@media (max-width: 980px) {
+@media (max-width: 900px) {
   .board-side {
     position: static;
   }
@@ -1125,16 +1127,35 @@ a {
 .board-tools {
   display: grid;
   gap: 1rem;
+  min-width: 0;
 }
 
 .board-tools__section {
   display: grid;
   gap: 0.65rem;
+  min-width: 0;
 }
 
 .board-tools__section-title {
   font-weight: 650;
   font-size: 0.92rem;
+}
+
+.board-tools .ui-input,
+.board-tools .ui-select,
+.board-tools .ui-textarea,
+.board-tools .ui-file-input {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.board-tools .workflow-actions {
+  width: 100%;
+}
+
+.board-tools .workflow-actions .ui-button {
+  white-space: nowrap;
 }
 
 .board-item {
