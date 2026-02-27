@@ -13,6 +13,7 @@ from drf_spectacular.utils import OpenApiExample, OpenApiParameter, extend_schem
 
 from cases.models import Case
 from cases.constants import CaseStatus
+from cases.constants import CRIME_LEVEL_DEGREE
 
 from .models import (
     BoardConnection,
@@ -77,24 +78,6 @@ def _get_suspect_or_404(case: Case, suspect_id: int) -> CaseSuspect:
 def _get_or_create_interrogation(suspect: CaseSuspect) -> Interrogation:
     obj, _ = Interrogation.objects.get_or_create(suspect=suspect)
     return obj
-
-
-def _compute_most_wanted_metrics(suspect: CaseSuspect):
-    """Compute days_wanted, degree, ranking, reward for a suspect."""
-    from cases.constants import CRIME_LEVEL_DEGREE
-
-    case = suspect.case
-    degree = CRIME_LEVEL_DEGREE.get(case.crime_level, 0)
-
-    # Days since suspect was proposed and case is not closed
-    if case.status != CaseStatus.CLOSED:
-        days = (timezone.now().date() - suspect.proposed_at.date()).days or 1
-    else:
-        days = 0
-
-    ranking = days * degree
-    reward = ranking * 20_000_000
-    return days, degree, ranking, reward
 
 
 class CaseBoardView(APIView):
@@ -747,6 +730,16 @@ class SuspectInterrogationChiefReviewView(APIView):
 # -----------------------------------------------------------------------------
 
 
+def _suspect_identity_key(s: CaseSuspect) -> str:
+    """
+    Group suspects by person identity.
+    Prefer national_id; fallback to name+phone (best effort).
+    """
+    if getattr(s, "national_id", None):
+        return f"nid:{s.national_id}"
+    return f"np:{(s.first_name or '').strip().lower()}|{(s.last_name or '').strip().lower()}|{(s.phone or '').strip()}"
+
+
 class MostWantedView(APIView):
     """List most wanted suspects with ranking and reward."""
 
@@ -783,31 +776,68 @@ class MostWantedView(APIView):
             .prefetch_related("interrogation")
         )
 
-        items = []
+        groups = {}  # key -> aggregated metrics
+
         for s in suspects:
             # Check if captain has made final decision
-            interrogation = getattr(s, 'interrogation', None)
+            interrogation = getattr(s, "interrogation", None)
             if not interrogation or interrogation.captain_final_decision is not True:
                 continue
-            
+
             # For critical cases, also check chief approval
             if s.case.crime_level == "critical" and interrogation.chief_decision is not True:
                 continue
-            days, degree, ranking, reward = _compute_most_wanted_metrics(s)
-            if ranking <= 0:
-                continue
-            items.append(
-                {
-                    "suspect_id": s.id,
-                    "first_name": s.first_name,
-                    "last_name": s.last_name,
-                    "national_id": s.national_id,
-                    "phone": s.phone,
-                    "photo": s.photo,
+
+            key = _suspect_identity_key(s)
+
+            # Crime degree for THIS case contributes to "max_crime_degree_ever"
+            degree = CRIME_LEVEL_DEGREE.get(s.case.crime_level, 0)
+
+            # Days wanted only counts for OPEN cases
+            if s.case.status != CaseStatus.CLOSED:
+                days = (timezone.now().date() - s.proposed_at.date()).days or 1
+            else:
+                days = 0
+
+            if key not in groups:
+                # representative suspect (used for name/phone/photo output)
+                groups[key] = {
+                    "rep": s,
                     "max_days_wanted": days,
                     "max_crime_degree": degree,
+                }
+            else:
+                g = groups[key]
+                # keep a representative suspect (optional rule: prefer one with photo)
+                if g["rep"].photo is None and s.photo is not None:
+                    g["rep"] = s
+
+                g["max_days_wanted"] = max(g["max_days_wanted"], days)
+                g["max_crime_degree"] = max(g["max_crime_degree"], degree)
+
+        # Build response items
+        items = []
+        for g in groups.values():
+            rep = g["rep"]
+            max_days = g["max_days_wanted"]
+            max_degree = g["max_crime_degree"]
+
+            ranking = max_days * max_degree
+            if ranking <= 0:
+                continue
+
+            items.append(
+                {
+                    "suspect_id": rep.id,  # representative id
+                    "first_name": rep.first_name,
+                    "last_name": rep.last_name,
+                    "national_id": rep.national_id,
+                    "phone": rep.phone,
+                    "photo": rep.photo,
+                    "max_days_wanted": max_days,
+                    "max_crime_degree": max_degree,
                     "ranking": ranking,
-                    "reward_amount": reward,
+                    "reward_amount": ranking * 20_000_000,
                 }
             )
 
