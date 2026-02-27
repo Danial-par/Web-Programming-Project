@@ -22,6 +22,8 @@ import { ComplaintDetailPage } from "../pages/ComplaintDetailPage";
 import { SceneReportsPage } from "../pages/SceneReportsPage";
 import { SceneReportCreatePage } from "../pages/SceneReportCreatePage";
 import { SceneReportDetailPage } from "../pages/SceneReportDetailPage";
+import { TipsPage } from "../pages/TipsPage";
+import { RewardLookupPage } from "../pages/RewardLookupPage";
 
 export const AppRoutes: React.FC = () => {
   return (
@@ -47,6 +49,18 @@ export const AppRoutes: React.FC = () => {
         <Route path="/cases/:caseId" element={<CaseDetailPage />} />
         <Route path="/cases/:caseId/suspects" element={<CaseSuspectsPage />} />
         <Route path="/complaints" element={<ComplaintsPage />} />
+        <Route path="/tips" element={<TipsPage />} />
+        <Route
+          path="/rewards/lookup"
+          element={
+            <RoleGuard
+              roles={["Admin", "Chief", "Captain", "Sergeant", "Detective", "Police Officer", "Patrol Officer"]}
+              fallback={<Navigate to="/dashboard" replace />}
+            >
+              <RewardLookupPage />
+            </RoleGuard>
+          }
+        />
         <Route path="/complaints/:complaintId" element={<ComplaintDetailPage />} />
         <Route path="/scene-reports" element={<SceneReportsPage />} />
         <Route path="/scene-reports/new" element={<SceneReportCreatePage />} />

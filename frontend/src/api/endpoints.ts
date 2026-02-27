@@ -26,6 +26,10 @@ export const endpoints = {
   evidence: "/evidence/",
   evidenceDetail: (evidenceId: number | string) => `/evidence/${evidenceId}/`,
   evidenceForensicResults: (evidenceId: number | string) => `/evidence/${evidenceId}/forensic-results/`,
+  tips: "/tips/",
+  tipOfficerReview: (tipId: number | string) => `/tips/${tipId}/officer-review/`,
+  tipDetectiveReview: (tipId: number | string) => `/tips/${tipId}/detective-review/`,
+  rewardLookup: "/rewards/lookup/",
   // Detective board
   boardForCase: (caseId: number | string) => `/cases/${caseId}/board/`,
   boardItemsForCase: (caseId: number | string) => `/cases/${caseId}/board/items/`,

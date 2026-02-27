@@ -238,3 +238,78 @@ export function listNotifications(options?: { unread?: boolean }): Promise<Notif
   const path = unread ? `${endpoints.notifications}?unread=1` : endpoints.notifications;
   return apiRequest<NotificationRecord[]>(path, { method: "GET" });
 }
+
+export type TipStatus =
+  | "submitted"
+  | "officer_rejected"
+  | "forwarded_to_detective"
+  | "detective_rejected"
+  | "approved";
+
+export interface TipReward {
+  reward_code: string;
+  reward_amount: number;
+  created_at: string;
+}
+
+export interface TipRecord {
+  id: number;
+  user: number;
+  case: number | null;
+  suspect: number | null;
+  details: string;
+  status: TipStatus;
+  reward: TipReward | null;
+  officer_message: string;
+  detective_message: string;
+  created_at: string;
+}
+
+export function createTip(payload: { case?: number; suspect?: number; details: string }): Promise<TipRecord> {
+  return apiRequest<TipRecord>(endpoints.tips, {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
+}
+
+export function officerReviewTip(
+  tipId: number | string,
+  payload: { decision: "reject" | "forward"; message?: string }
+): Promise<TipRecord> {
+  return apiRequest<TipRecord>(endpoints.tipOfficerReview(tipId), {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
+}
+
+export function detectiveReviewTip(
+  tipId: number | string,
+  payload: { decision: "approve" | "reject"; message?: string }
+): Promise<TipRecord> {
+  return apiRequest<TipRecord>(endpoints.tipDetectiveReview(tipId), {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
+}
+
+export interface RewardLookupResult {
+  reward_code: string;
+  reward_amount: number;
+  created_at: string;
+  tip_user: {
+    id: number;
+    national_id: string;
+    username: string;
+    first_name?: string;
+    last_name?: string;
+    email?: string;
+    phone?: string;
+  };
+}
+
+export function lookupReward(payload: { national_id: string; reward_code: string }): Promise<RewardLookupResult> {
+  return apiRequest<RewardLookupResult>(endpoints.rewardLookup, {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
+}

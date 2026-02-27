@@ -11,6 +11,10 @@ export const DashboardLayout: React.FC = () => {
   const fullName = [user?.first_name, user?.last_name].filter(Boolean).join(" ") || user?.username || "Officer";
   const rolesDisplay = user?.roles && user.roles.length > 0 ? user.roles.join(", ") : "No roles assigned";
   const isAdmin = !!user?.roles?.includes("Admin");
+  const canRewardLookup =
+    !!user?.roles?.some((r) =>
+      ["Admin", "Chief", "Captain", "Sergeant", "Detective", "Police Officer", "Patrol Officer"].includes(r)
+    );
 
   return (
     <div className="app-shell app-shell--dashboard">
@@ -42,12 +46,20 @@ export const DashboardLayout: React.FC = () => {
           <Link to="/evidence" onClick={() => setSidebarOpen(false)}>
             Evidence
           </Link>
+          <Link to="/tips" onClick={() => setSidebarOpen(false)}>
+            Tips / Rewards
+          </Link>
           <Link to="/reports" onClick={() => setSidebarOpen(false)}>
             Reports
           </Link>
           {isAdmin && (
             <Link to="/admin" onClick={() => setSidebarOpen(false)}>
               Admin
+            </Link>
+          )}
+          {canRewardLookup && (
+            <Link to="/rewards/lookup" onClick={() => setSidebarOpen(false)}>
+              Reward Lookup
             </Link>
           )}
         </nav>
