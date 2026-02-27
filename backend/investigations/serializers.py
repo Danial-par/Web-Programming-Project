@@ -356,6 +356,14 @@ class MostWantedSuspectSerializer(serializers.Serializer):
     reward_amount = serializers.IntegerField()
 
 
+class TipRewardSerializer(serializers.ModelSerializer):
+    """Minimal reward info returned to the tip submitter after approval."""
+    class Meta:
+        model = Reward
+        fields = ["reward_code", "reward_amount", "created_at"]
+        read_only_fields = fields
+
+
 class TipSerializer(serializers.ModelSerializer):
     class Meta:
         model = Tip
@@ -366,6 +374,7 @@ class TipSerializer(serializers.ModelSerializer):
             "suspect",
             "details",
             "status",
+            "reward",
             "officer_message",
             "officer_reviewed_by",
             "officer_reviewed_at",

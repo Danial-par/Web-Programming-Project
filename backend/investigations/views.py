@@ -1016,5 +1016,9 @@ class RewardLookupView(APIView):
             "id": reward.tip.user_id,
             "national_id": reward.tip.user.national_id,
             "username": reward.tip.user.username,
+            "email": getattr(reward.tip.user, "email", ""),
+            "phone": getattr(reward.tip.user, "phone", ""),
+            "first_name": getattr(reward.tip.user, "first_name", ""),
+            "last_name": getattr(reward.tip.user, "last_name", ""),
         }
         return Response(payload, status=status.HTTP_200_OK)
