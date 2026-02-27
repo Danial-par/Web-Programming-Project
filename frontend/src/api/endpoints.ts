@@ -27,6 +27,7 @@ export const endpoints = {
   evidenceDetail: (evidenceId: number | string) => `/evidence/${evidenceId}/`,
   evidenceForensicResults: (evidenceId: number | string) => `/evidence/${evidenceId}/forensic-results/`,
   tips: "/tips/",
+  tipDetail: (tipId: number | string) => `/tips/${tipId}/`,
   tipOfficerReview: (tipId: number | string) => `/tips/${tipId}/officer-review/`,
   tipDetectiveReview: (tipId: number | string) => `/tips/${tipId}/detective-review/`,
   rewardLookup: "/rewards/lookup/",

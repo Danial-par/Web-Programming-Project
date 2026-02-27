@@ -393,6 +393,35 @@ class NotificationViewSet(viewsets.ViewSet):
 
         data = NotificationSerializer(qs.order_by("-created_at"), many=True).data
         return Response(data, status=status.HTTP_200_OK)
+    
+
+from rest_framework import viewsets
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
+
+class TipViewSet(viewsets.ReadOnlyModelViewSet):
+    """
+    Read-only access to tips for review screens.
+    Filtering:
+      - ?status=submitted|forwarded_to_detective|approved|...
+      - ?mine=1  (tips created by the current user)
+    """
+    serializer_class = TipSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        qs = Tip.objects.select_related("user", "case", "suspect").order_by("-created_at")
+
+        status_param = self.request.query_params.get("status")
+        mine = self.request.query_params.get("mine")
+
+        if status_param:
+            qs = qs.filter(status=status_param)
+
+        if mine in ("1", "true", "yes"):
+            qs = qs.filter(user=self.request.user)
+
+        return qs
 
 
 class CaseSuspectProposeView(APIView):

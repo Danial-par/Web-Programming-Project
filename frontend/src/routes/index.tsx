@@ -24,6 +24,7 @@ import { SceneReportCreatePage } from "../pages/SceneReportCreatePage";
 import { SceneReportDetailPage } from "../pages/SceneReportDetailPage";
 import { TipsPage } from "../pages/TipsPage";
 import { RewardLookupPage } from "../pages/RewardLookupPage";
+import { TipsReviewPage } from "../pages/TipsReviewPage";
 
 export const AppRoutes: React.FC = () => {
   return (
@@ -58,6 +59,17 @@ export const AppRoutes: React.FC = () => {
               fallback={<Navigate to="/dashboard" replace />}
             >
               <RewardLookupPage />
+            </RoleGuard>
+          }
+        />
+        <Route
+          path="/tips/review"
+          element={
+            <RoleGuard
+              roles={["Admin", "Chief", "Captain", "Sergeant", "Detective", "Police Officer", "Patrol Officer"]}
+              fallback={<Navigate to="/dashboard" replace />}
+            >
+              <TipsReviewPage />
             </RoleGuard>
           }
         />

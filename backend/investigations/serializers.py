@@ -365,6 +365,7 @@ class TipRewardSerializer(serializers.ModelSerializer):
 
 
 class TipSerializer(serializers.ModelSerializer):
+    reward = TipRewardSerializer(read_only=True)
     class Meta:
         model = Tip
         fields = [

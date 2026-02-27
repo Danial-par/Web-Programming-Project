@@ -19,11 +19,13 @@ from .views import (
     TipCreateView,
     TipDetectiveReviewView,
     TipOfficerReviewView,
+    TipViewSet,
 )
 
 
 router = DefaultRouter()
 router.register(r"notifications", NotificationViewSet, basename="notification")
+router.register(r"tips", TipViewSet, basename="tips")
 
 urlpatterns = [
     # Detective board
