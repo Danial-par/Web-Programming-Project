@@ -883,6 +883,46 @@ class TipCreateView(APIView):
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
+        responses={200: TipSerializer(many=True)},
+        description="List tips (review queue for officers/detectives) or list your own tips with ?mine=1.",
+    )
+    def get(self, request):
+        from common.role_helpers import (
+            user_can_officer_review_tip,
+            user_can_detective_review_tip,
+            user_can_view_all_cases,
+        )
+
+        status_param = request.query_params.get("status")
+        mine = request.query_params.get("mine")
+
+        qs = Tip.objects.select_related("user", "case", "suspect").order_by("-created_at")
+
+        # Any user can view their own tips
+        if mine in ("1", "true", "yes"):
+            qs = qs.filter(user=request.user)
+        else:
+            # Otherwise only reviewers (officer/detective) or global viewers can list tips
+            allowed = (
+                user_can_officer_review_tip(request.user)
+                or user_can_detective_review_tip(request.user)
+                or user_can_view_all_cases(request.user)
+            )
+            if not allowed:
+                return Response(
+                    {"detail": "You do not have permission to list tips.", "code": "forbidden"},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+
+        if status_param:
+            qs = qs.filter(status=status_param)
+
+        return Response(
+            TipSerializer(qs, many=True, context={"request": request}).data,
+            status=status.HTTP_200_OK,
+        )
+
+    @extend_schema(
         request=TipCreateSerializer,
         responses={201: TipSerializer},
         description="Create a new tip about a case and/or suspect.",
