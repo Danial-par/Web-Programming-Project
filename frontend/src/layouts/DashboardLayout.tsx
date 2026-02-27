@@ -62,6 +62,11 @@ export const DashboardLayout: React.FC = () => {
               Reward Lookup
             </Link>
           )}
+          {canRewardLookup && (
+            <Link to="/tips/review" onClick={() => setSidebarOpen(false)}>
+              Tips Review
+            </Link>
+          )}
         </nav>
         <button className="app-sidebar__logout" type="button" onClick={logout}>
           Logout

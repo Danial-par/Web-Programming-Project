@@ -11,10 +11,10 @@
     "lint": "echo \"add lint tooling in later steps\""
   },
   "dependencies": {
+    "html-to-image": "^1.11.13",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "react-router-dom": "^6.22.0",
-    "html-to-image": "^1.11.11"
+    "react-router-dom": "^6.22.0"
   },
   "devDependencies": {
     "@testing-library/jest-dom": "^6.4.2",
