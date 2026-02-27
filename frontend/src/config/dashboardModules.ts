@@ -60,6 +60,27 @@ export const dashboardModules: DashboardModule[] = [
     requiredRoles: ["Admin"]
   },
   {
+    id: "tips",
+    title: "Tips / Rewards",
+    description: "Submit tips and view your reward code after approval.",
+    path: "/tips",
+    requiredRoles: []
+  },
+  {
+    id: "tips-review",
+    title: "Tips Review",
+    description: "Officer/detective review queue for tips (forward, approve, reject).",
+    path: "/tips/review",
+    requiredRoles: ["Admin", "Chief", "Captain", "Sergeant", "Detective", "Police Officer", "Patrol Officer"]
+  },
+  {
+    id: "reward-lookup",
+    title: "Reward Lookup",
+    description: "Verify rewards using national ID and reward code.",
+    path: "/rewards/lookup",
+    requiredRoles: ["Admin", "Chief", "Captain", "Sergeant", "Detective", "Police Officer", "Patrol Officer"]
+  },
+  {
     id: "most-wanted",
     title: "Most Wanted",
     description: "Public list of high-priority suspects with reward information.",
