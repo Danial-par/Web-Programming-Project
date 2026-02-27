@@ -10,6 +10,8 @@ export const endpoints = {
   cases: "/cases/",
   caseDetail: (caseId: number | string) => `/cases/${caseId}/`,
   caseAssignDetective: (caseId: number | string) => `/cases/${caseId}/assign-detective/`,
+  caseWitnesses: (caseId: number | string) => `/cases/${caseId}/witnesses/`,
+  caseRemoveWitness: (caseId: number | string, userId: number | string) => `/cases/${caseId}/witnesses/${userId}/`,
   caseReport: (caseId: number | string) => `/cases/${caseId}/report/`,
   caseSuspectTrial: (caseId: number | string, suspectId: number | string) =>
     `/cases/${caseId}/suspects/${suspectId}/trial/`,

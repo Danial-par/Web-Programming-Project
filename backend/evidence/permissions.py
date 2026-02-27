@@ -42,8 +42,27 @@ class CanViewEvidence(BasePermission):
 
 class CanCreateEvidence(BasePermission):
     def has_permission(self, request, view):
-        if request.method == "POST" and view.action == "create":
-            return request.user.is_authenticated and user_can_add_evidence(request.user)
+        if request.method == "POST" and getattr(view, "action", None) == "create":
+            # Standard: police roles / permissions
+            if request.user.is_authenticated and user_can_add_evidence(request.user):
+                return True
+
+            # Allow a normal user registered as a witness on the case to add evidence
+            # for that same case.
+            if not request.user.is_authenticated:
+                return False
+
+            case_id = request.data.get("case")
+            if not case_id:
+                return False
+
+            try:
+                case = Case.objects.get(id=case_id)
+            except Case.DoesNotExist:
+                return False
+
+            return case.participants.filter(user=request.user, is_complainant=False).exists()
+
         return True
 
 

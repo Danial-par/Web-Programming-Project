@@ -132,3 +132,27 @@ class CanViewCaseReport(BasePermission):
             or obj.assigned_to_id == user.id
             or obj.participants.filter(user=user).exists()
         )
+    
+
+class CanManageCaseParticipants(BasePermission):
+    """Manage witnesses/participants for a case.
+
+    Allowed when:
+    - user has global visibility (view_all_cases), or
+    - Sergeant role, or
+    - Detective role AND assigned to this case, or
+    - case creator, or
+    - case assigned detective.
+    """
+
+    def has_object_permission(self, request, view, obj):
+        if user_can_view_all_cases(request.user):
+            return True
+
+        if _user_has_role(request.user, ROLE_SERGEANT):
+            return True
+
+        if _user_has_role(request.user, ROLE_DETECTIVE):
+            return obj.assigned_to_id == request.user.id
+
+        return obj.created_by_id == request.user.id or obj.assigned_to_id == request.user.id

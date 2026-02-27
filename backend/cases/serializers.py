@@ -20,6 +20,17 @@ from .constants import CaseStatus, CrimeLevel, ComplaintStatus, ComplaintComplai
 User = get_user_model()
 
 
+class CaseParticipantSerializer(serializers.Serializer):
+    """Lightweight participant payload used for witnesses/complainants."""
+
+    user_id = serializers.IntegerField()
+    username = serializers.CharField()
+    national_id = serializers.CharField()
+    phone = serializers.CharField()
+    email = serializers.EmailField()
+    role = serializers.CharField()
+
+
 class CaseListSerializer(serializers.ModelSerializer):
     class Meta:
         model = Case

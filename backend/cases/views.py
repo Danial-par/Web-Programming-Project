@@ -44,6 +44,7 @@ from .serializers import (
     PaymentStartSerializer,
     TrialSerializer,
     TrialVerdictWriteSerializer,
+    CaseParticipantSerializer,
 )
 from .permissions import (
     CanViewCase,
@@ -56,6 +57,7 @@ from .permissions import (
     CanViewSceneReport,
     CanJudgeTrial,
     CanViewCaseReport,
+    CanManageCaseParticipants,
 )
 
 
@@ -158,6 +160,112 @@ class CaseViewSet(ModelViewSet):
         case.save(update_fields=["assigned_to"])
 
         return Response(CaseDetailSerializer(case).data, status=status.HTTP_200_OK)
+    
+    @extend_schema(
+        responses={200: CaseParticipantSerializer(many=True)},
+        description="List registered witnesses (case participants with is_complainant=false).",
+    )
+    @action(
+        detail=True,
+        methods=["get", "post"],
+        url_path="witnesses",
+        permission_classes=[IsAuthenticated, CanManageCaseParticipants],
+    )
+    def witnesses(self, request, pk=None):
+        case = self.get_object()
+
+        # object-level permission check
+        for perm in self.get_permissions():
+            if hasattr(perm, "has_object_permission") and not perm.has_object_permission(request, self, case):
+                self.permission_denied(request)
+
+        if request.method.lower() == "get":
+            participants = case.participants.filter(is_complainant=False).select_related("user").order_by("joined_at")
+            data = [
+                {
+                    "user_id": p.user_id,
+                    "username": p.user.username,
+                    "national_id": getattr(p.user, "national_id", ""),
+                    "phone": getattr(p.user, "phone", ""),
+                    "email": getattr(p.user, "email", ""),
+                    "role": "witness",
+                }
+                for p in participants
+            ]
+            return Response(data, status=status.HTTP_200_OK)
+
+        # POST: add witness (by user_id or national_id)
+        user_id = request.data.get("user_id")
+        national_id = request.data.get("national_id")
+
+        if not user_id and not national_id:
+            return Response(
+                {"detail": "Provide user_id or national_id.", "code": "invalid_payload"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            if user_id:
+                target = User.objects.get(id=int(user_id))
+            else:
+                target = User.objects.get(national_id=str(national_id))
+        except (User.DoesNotExist, ValueError, TypeError):
+            return Response(
+                {"detail": "User not found.", "code": "user_not_found"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        participant, created = CaseParticipant.objects.get_or_create(
+            case=case,
+            user=target,
+            defaults={"is_complainant": False},
+        )
+
+        # If they already exist as complainant, flip to witness (keeps minimal schema).
+        if not created and participant.is_complainant:
+            participant.is_complainant = False
+            participant.save(update_fields=["is_complainant"])
+
+        payload = {
+            "user_id": participant.user_id,
+            "username": participant.user.username,
+            "national_id": getattr(participant.user, "national_id", ""),
+            "phone": getattr(participant.user, "phone", ""),
+            "email": getattr(participant.user, "email", ""),
+            "role": "witness",
+        }
+        return Response(payload, status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)
+
+
+    @extend_schema(
+        responses={204: None},
+        description="Remove a witness participant from the case.",
+    )
+    @action(
+        detail=True,
+        methods=["delete"],
+        url_path=r"witnesses/(?P<user_id>[^/.]+)",
+        permission_classes=[IsAuthenticated, CanManageCaseParticipants],
+    )
+    def remove_witness(self, request, pk=None, user_id=None):
+        case = self.get_object()
+
+        # object-level permission check
+        for perm in self.get_permissions():
+            if hasattr(perm, "has_object_permission") and not perm.has_object_permission(request, self, case):
+                self.permission_denied(request)
+
+        try:
+            uid = int(user_id)
+        except (TypeError, ValueError):
+            return Response({"detail": "Invalid user_id.", "code": "invalid_user_id"}, status=status.HTTP_400_BAD_REQUEST)
+
+        participant = CaseParticipant.objects.filter(case=case, user_id=uid, is_complainant=False).first()
+        if not participant:
+            return Response({"detail": "Witness not found on this case.", "code": "not_found"}, status=status.HTTP_404_NOT_FOUND)
+
+        participant.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
     @extend_schema(
         responses={200: CaseReportSerializer},

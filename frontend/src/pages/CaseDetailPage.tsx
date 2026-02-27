@@ -1,6 +1,14 @@
 import React, { useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { CaseDetail, getCase, assignCaseDetective } from "../api/cases";
+import {
+  CaseDetail,
+  getCase,
+  assignCaseDetective,
+  listCaseWitnesses,
+  addCaseWitness,
+  removeCaseWitness,
+  CaseWitness
+} from "../api/cases";
 import { Alert } from "../components/ui/Alert";
 import { Button } from "../components/ui/Button";
 import { Card } from "../components/ui/Card";
@@ -21,6 +29,23 @@ export const CaseDetailPage: React.FC = () => {
   const { showError, showSuccess } = useToast();
   const [detectiveIdInput, setDetectiveIdInput] = useState("");
   const [isAssigning, setIsAssigning] = useState(false);
+
+  const [witnessUserIdInput, setWitnessUserIdInput] = useState("");
+  const [witnessNationalIdInput, setWitnessNationalIdInput] = useState("");
+  const [isUpdatingWitnesses, setIsUpdatingWitnesses] = useState(false);
+
+  const {
+    data: witnesses,
+    isLoading: isWitnessLoading,
+    error: witnessError,
+    refetch: refetchWitnesses
+  } = useAsyncData<CaseWitness[]>(
+    async () => {
+      if (!isValidId) return [];
+      return listCaseWitnesses(caseId);
+    },
+    [caseId, isValidId]
+  );
 
   const {
     data: caseDetail,
@@ -91,6 +116,59 @@ export const CaseDetailPage: React.FC = () => {
       showError(err instanceof Error ? err.message : "Failed to assign detective.");
     } finally {
       setIsAssigning(false);
+    }
+  };
+
+  const handleAddWitness = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!caseDetail) return;
+
+    const userIdTrimmed = witnessUserIdInput.trim();
+    const nidTrimmed = witnessNationalIdInput.trim();
+
+    if (!userIdTrimmed && !nidTrimmed) {
+      showError("Provide witness user ID or national ID.");
+      return;
+    }
+
+    const payload: { user_id?: number; national_id?: string } = {};
+
+    if (userIdTrimmed) {
+      const numericId = Number(userIdTrimmed);
+      if (!Number.isInteger(numericId) || numericId <= 0) {
+        showError("Witness user ID must be a positive integer.");
+        return;
+      }
+      payload.user_id = numericId;
+    } else {
+      payload.national_id = nidTrimmed;
+    }
+
+    setIsUpdatingWitnesses(true);
+    try {
+      await addCaseWitness(caseDetail.id, payload);
+      showSuccess("Witness added to case.");
+      setWitnessUserIdInput("");
+      setWitnessNationalIdInput("");
+      await refetchWitnesses();
+    } catch (err) {
+      showError(err instanceof Error ? err.message : "Failed to add witness.");
+    } finally {
+      setIsUpdatingWitnesses(false);
+    }
+  };
+
+  const handleRemoveWitness = async (userId: number) => {
+    if (!caseDetail) return;
+    setIsUpdatingWitnesses(true);
+    try {
+      await removeCaseWitness(caseDetail.id, userId);
+      showSuccess("Witness removed.");
+      await refetchWitnesses();
+    } catch (err) {
+      showError(err instanceof Error ? err.message : "Failed to remove witness.");
+    } finally {
+      setIsUpdatingWitnesses(false);
     }
   };
 
@@ -181,6 +259,90 @@ export const CaseDetailPage: React.FC = () => {
           </p>
         </div>
       </Card>
+
+      <RoleGuard roles={["Captain", "Chief", "Admin", "Sergeant", "Detective"]}>
+        <Card title="Witnesses">
+          <p className="workflow-muted" style={{ marginTop: 0 }}>
+            Add a registered user as a witness on this case (so they can submit witness evidence for this case).
+          </p>
+
+          <form
+            onSubmit={handleAddWitness}
+            style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap", alignItems: "flex-end" }}
+          >
+            <div className="workflow-field">
+              <label className="ui-field__label" htmlFor="witness-user-id">
+                Witness user ID (optional)
+              </label>
+              <input
+                id="witness-user-id"
+                className="ui-input"
+                placeholder="e.g. 42"
+                value={witnessUserIdInput}
+                onChange={(e) => setWitnessUserIdInput(e.target.value)}
+              />
+            </div>
+
+            <div className="workflow-field">
+              <label className="ui-field__label" htmlFor="witness-national-id">
+                Witness national ID (optional)
+              </label>
+              <input
+                id="witness-national-id"
+                className="ui-input"
+                placeholder="e.g. 1234567890"
+                value={witnessNationalIdInput}
+                onChange={(e) => setWitnessNationalIdInput(e.target.value)}
+              />
+            </div>
+
+            <Button type="submit" disabled={isUpdatingWitnesses}>
+              {isUpdatingWitnesses ? "Saving..." : "Add witness"}
+            </Button>
+          </form>
+
+          <div style={{ marginTop: "1rem" }}>
+            {isWitnessLoading ? (
+              <div className="workflow-muted">Loading witnesses...</div>
+            ) : witnessError ? (
+              <Alert
+                variant="error"
+                title="Failed to load witnesses"
+                actions={
+                  <Button type="button" variant="secondary" onClick={refetchWitnesses}>
+                    Retry
+                  </Button>
+                }
+              >
+                {witnessError.message}
+              </Alert>
+            ) : !witnesses || witnesses.length === 0 ? (
+              <div className="workflow-muted">No witnesses registered for this case.</div>
+            ) : (
+              <div className="workflow-stack" style={{ gap: "0.5rem" }}>
+                {witnesses.map((w) => (
+                  <div key={w.user_id} style={{ display: "flex", justifyContent: "space-between", gap: "1rem" }}>
+                    <div>
+                      <div style={{ fontWeight: 600 }}>{w.username} (ID: {w.user_id})</div>
+                      <div className="workflow-muted" style={{ fontSize: "0.9rem" }}>
+                        NID: {w.national_id || "—"} · Phone: {w.phone || "—"} · Email: {w.email || "—"}
+                      </div>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      disabled={isUpdatingWitnesses}
+                      onClick={() => handleRemoveWitness(w.user_id)}
+                    >
+                      Remove
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </Card>
+      </RoleGuard>
 
       <Card title="Investigation links">
         <div className="workflow-actions">
